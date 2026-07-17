@@ -1,0 +1,130 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/PostCard.astro';
+import SectionDivider from '../components/SectionDivider.astro';
+import { getCollection } from 'astro:content';
+
+const allPosts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.publishDate.valueOf() - a.data.publishDate.valueOf());
+
+const featuredPost = allPosts[0];
+const recentPosts = allPosts.slice(1);
+
+function getReadTime(body: string | undefined): string {
+  const words = body?.split(/\s+/).length ?? 0;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+}
+---
+
+<BaseLayout
+  title="Makeshift Engineering Blog"
+  description="Engineering deep dives, project updates, and things we've learned. From databases to developer tools."
+>
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content animate-in">
+        <h1 class="hero-title">
+          From the <span class="hero-accent">Blog</span>
+        </h1>
+        <p class="hero-description">
+          Engineering deep dives, project updates, and things we've learned.<br />
+          From databases to developer tools.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {featuredPost && (
+    <section class="featured-section">
+      <div class="container">
+        <SectionDivider label="latest" />
+        <PostCard
+          title={featuredPost.data.title}
+          description={featuredPost.data.description}
+          publishDate={featuredPost.data.publishDate}
+          category={featuredPost.data.category}
+          slug={featuredPost.id}
+          readTime={getReadTime(featuredPost.body)}
+          featured={true}
+        />
+      </div>
+    </section>
+  )}
+
+  {recentPosts.length > 0 && (
+    <section class="posts-section">
+      <div class="container">
+        <SectionDivider label="all posts" />
+        <div class="posts-grid">
+          {recentPosts.map((post) => (
+            <PostCard
+              title={post.data.title}
+              description={post.data.description}
+              publishDate={post.data.publishDate}
+              category={post.data.category}
+              slug={post.id}
+              readTime={getReadTime(post.body)}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .hero {
+    padding: 5rem 0 3rem;
+  }
+
+  .hero-content {
+    max-width: 640px;
+  }
+
+  .hero-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    color: var(--fg-0);
+    margin-bottom: 1rem;
+  }
+
+  .hero-accent {
+    color: var(--accent);
+  }
+
+  .hero-description {
+    font-size: 1.125rem;
+    color: var(--fg-2);
+    line-height: 1.7;
+  }
+
+  .featured-section {
+    padding: 1rem 0;
+  }
+
+  .posts-section {
+    padding: 1rem 0 4rem;
+  }
+
+  .posts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 3rem 0 2rem;
+    }
+
+    .hero-title {
+      font-size: 2.5rem;
+    }
+
+    .hero-description {
+      font-size: 1rem;
+    }
+  }
+</style>

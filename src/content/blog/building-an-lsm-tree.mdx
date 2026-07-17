@@ -1,0 +1,104 @@
+---
+title: "Building an LSM Tree from Scratch"
+description: "How we designed PenguinDB's storage engine — from memtables and SSTables to compaction strategies."
+publishDate: 2026-07-15
+author: "Rahul"
+authorGithub: "rahulvramesh"
+category: "engineering"
+tags: ["databases", "storage-engine", "go", "penguindb"]
+interactive: true
+---
+
+import InteractiveWrapper from '../../components/interactive/InteractiveWrapper.tsx';
+import LSMTreeVisualization from '../../components/interactive/LSMTreeVisualization.tsx';
+
+Building a database engine means making hard choices about how data lives on disk. For [PenguinDB](https://github.com/makeshift-engineering/penguin-db), we chose an **LSM-tree** (Log-Structured Merge-tree) — the same architecture behind LevelDB, RocksDB, and Cassandra.
+
+This post walks through why we chose it, how it works, and the tradeoffs we made.
+
+## Why an LSM Tree?
+
+There are two dominant storage architectures for key-value stores:
+
+- **B-trees** — the classic. Great for read-heavy workloads, used in PostgreSQL, MySQL InnoDB.
+- **LSM-trees** — optimized for writes. Buffer writes in memory, flush sorted runs to disk.
+
+PenguinDB prioritizes **write throughput** and **sequential I/O**, making LSM-trees the natural fit. The key insight is simple: *random writes are slow, sequential writes are fast*. An LSM-tree converts random writes into sequential ones.
+
+## The Write Path
+
+Every write in PenguinDB follows this path:
+
+1. **Write-Ahead Log (WAL)** — The entry is appended to an on-disk log for crash recovery.
+2. **Memtable** — The entry is inserted into an in-memory sorted structure (a skip list).
+3. **Flush** — When the memtable reaches capacity, it's flushed as a sorted **SSTable** (Sorted String Table) to disk.
+4. **Compaction** — Background processes merge overlapping SSTables to reclaim space and maintain read performance.
+
+Try it yourself — click "Write Entry" to see how data flows through the system:
+
+<InteractiveWrapper caption="Interactive LSM-tree write path visualization" client:visible>
+  <LSMTreeVisualization client:visible />
+</InteractiveWrapper>
+
+## Memtable: The In-Memory Buffer
+
+The memtable is a **sorted in-memory structure** — we use a skip list for `O(log n)` insertions and lookups. When a write comes in:
+
+1. Append to WAL (for durability)
+2. Insert into the active memtable
+3. If the key already exists, overwrite it (last-write-wins)
+
+When the memtable reaches a configurable threshold (default: 4MB in PenguinDB), it becomes **immutable** and a new empty memtable takes its place. The immutable memtable is then flushed to disk.
+
+```go
+func (db *DB) Put(key, value []byte) error {
+    // Step 1: Write to WAL
+    if err := db.wal.Append(key, value); err != nil {
+        return err
+    }
+
+    // Step 2: Insert into memtable
+    db.mu.Lock()
+    db.memtable.Put(key, value)
+
+    // Step 3: Check if flush is needed
+    if db.memtable.Size() >= db.opts.MemtableSize {
+        db.scheduleFlush()
+    }
+    db.mu.Unlock()
+
+    return nil
+}
+```
+
+## SSTables: Sorted Runs on Disk
+
+An SSTable is an **immutable, sorted file** on disk. It's the fundamental unit of persistent storage in an LSM-tree. Each SSTable contains:
+
+- **Data blocks** — Key-value pairs, sorted by key, compressed per block.
+- **Index block** — Sparse index mapping key prefixes to data block offsets.
+- **Bloom filter** — Probabilistic structure to quickly determine if a key *might* exist.
+- **Footer** — Metadata pointing to the index and filter blocks.
+
+The sorted order is critical — it enables binary search for point lookups and efficient iteration for range scans.
+
+## Compaction: Keeping Things Tidy
+
+Without compaction, you'd accumulate unbounded SSTables and reads would degrade (you'd have to check every SSTable). Compaction merges SSTables:
+
+- **Level 0 (L0)** — Direct flushes from memtable. May have overlapping key ranges.
+- **Level 1+ (L1, L2, ...)** — Each level has non-overlapping key ranges. Each level is ~10x the size of the previous.
+
+PenguinDB uses **leveled compaction**: when L0 accumulates enough SSTables, they're merged with L1. When L1 gets too large, it spills into L2, and so on.
+
+```
+L0:  [a-f] [c-k] [b-d]     ← overlapping ranges, direct from memtable
+L1:  [a-d] [e-h] [i-m]     ← non-overlapping, sorted
+L2:  [a-m] [n-z]           ← non-overlapping, 10x larger
+```
+
+## What's Next
+
+In the next post, we'll dive into **Write-Ahead Logging** — how PenguinDB ensures no data is ever lost, even when the process crashes mid-write.
+
+If you want to follow along with the code, PenguinDB is [open source on GitHub](https://github.com/makeshift-engineering/penguin-db).

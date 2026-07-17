@@ -1,0 +1,144 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="footer-inner container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="https://makeshift.pro" class="footer-logo">
+          makeshift<span class="logo-dot">.</span>
+        </a>
+        <p class="footer-tagline">
+          A small team of friends building things that matter. Open source, always.
+        </p>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Projects</h4>
+        <ul class="footer-list">
+          <li><a href="https://penguindb.makeshift.pro">PenguinDB</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Resources</h4>
+        <ul class="footer-list">
+          <li><a href="/">Blog</a></li>
+          <li><a href="https://github.com/makeshift-engineering" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="/rss.xml">RSS Feed</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Connect</h4>
+        <ul class="footer-list">
+          <li><a href="mailto:hello@makeshift.pro">hello@makeshift.pro</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span class="footer-copy">&copy; {year} Makeshift Engineering. All rights reserved.</span>
+      <span class="footer-built">Built with obsession · Astro</span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 4rem 0 2rem;
+    margin-top: 6rem;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 3rem;
+    margin-bottom: 3rem;
+  }
+
+  .footer-logo {
+    font-family: var(--font-mono);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--fg-0);
+    text-decoration: none;
+  }
+
+  .logo-dot {
+    color: var(--accent);
+  }
+
+  .footer-tagline {
+    color: var(--fg-2);
+    font-size: 0.875rem;
+    margin-top: 0.75rem;
+    line-height: 1.6;
+    max-width: 280px;
+  }
+
+  .footer-heading {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--fg-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 1rem;
+  }
+
+  .footer-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .footer-list a {
+    color: var(--fg-2);
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-out);
+  }
+
+  .footer-list a:hover {
+    color: var(--fg-0);
+  }
+
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-copy {
+    color: var(--fg-3);
+    font-size: 0.8125rem;
+  }
+
+  .footer-built {
+    color: var(--fg-3);
+    font-size: 0.8125rem;
+    font-family: var(--font-mono);
+  }
+
+  @media (max-width: 768px) {
+    .footer-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    .footer-brand {
+      grid-column: 1 / -1;
+    }
+
+    .footer-bottom {
+      flex-direction: column;
+      gap: 0.5rem;
+      text-align: center;
+    }
+  }
+</style>

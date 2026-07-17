@@ -1,0 +1,127 @@
+---
+title: "Write-Ahead Logging: Why Your Database Needs It"
+description: "A deep dive into WAL recovery, crash consistency, and how PenguinDB ensures no data is lost."
+publishDate: 2026-07-10
+author: "Rahul"
+authorGithub: "rahulvramesh"
+category: "deep-dives"
+tags: ["databases", "wal", "crash-recovery", "penguindb"]
+---
+
+Your database just crashed. Power went out mid-write. The process got OOM-killed. Whatever happened, the question is: **did you lose data?**
+
+If the database uses a Write-Ahead Log (WAL), the answer is **no**.
+
+## The Problem
+
+An LSM-tree buffers writes in a memtable — an in-memory data structure. Memory is volatile. If the process dies before the memtable is flushed to an SSTable on disk, those writes are gone.
+
+The naive solution is "flush more often," but that defeats the purpose of batching writes. You'd lose all the write amplification benefits of the LSM architecture.
+
+## The Solution: Log First, Ask Questions Later
+
+A WAL is dead simple in concept:
+
+1. **Before** any write enters the memtable, append it to a sequential log file on disk.
+2. If the process crashes, replay the log to reconstruct the memtable.
+3. Once the memtable is flushed to an SSTable, the WAL segment can be discarded.
+
+The key property: **appending to a file is fast**. It's a sequential write — the OS and the SSD love it. There's no seeking, no random I/O. It's the cheapest durable write you can do.
+
+## PenguinDB's WAL Format
+
+Each WAL entry in PenguinDB is a simple binary record:
+
+```
+┌─────────┬──────────┬─────────┬──────────┬───────┐
+│ CRC (4) │ Len (4)  │ Type(1) │ Key (var)│Val(var)│
+└─────────┴──────────┴─────────┴──────────┴───────┘
+```
+
+- **CRC32** — Checksum for corruption detection
+- **Length** — Total record length
+- **Type** — Put or Delete operation
+- **Key/Value** — The actual data, length-prefixed
+
+We chose a fixed-header format over something like protobuf for two reasons:
+1. Zero allocation parsing — we can validate the CRC without allocating
+2. Streaming reads — we know exactly how many bytes to read ahead
+
+```go
+type WALEntry struct {
+    CRC    uint32
+    Length uint32
+    Type   RecordType
+    Key    []byte
+    Value  []byte
+}
+
+func (w *Writer) Append(key, value []byte) error {
+    entry := WALEntry{
+        Type:  RecordTypePut,
+        Key:   key,
+        Value: value,
+    }
+
+    buf := entry.Marshal()
+    entry.CRC = crc32.ChecksumIEEE(buf[4:]) // CRC everything after the CRC field
+    binary.LittleEndian.PutUint32(buf[:4], entry.CRC)
+
+    _, err := w.file.Write(buf)
+    return err
+}
+```
+
+## Crash Recovery
+
+On startup, PenguinDB scans for WAL files and replays them:
+
+1. Open each WAL segment in order
+2. Read entries sequentially
+3. Validate CRC — skip corrupted entries (they represent incomplete writes)
+4. Insert valid entries into a fresh memtable
+5. Once replay is complete, the memtable contains all writes that happened after the last flush
+
+The beauty of this approach is that recovery time is proportional to the amount of data written **since the last flush**, not the total database size. A 100GB database with a 4MB memtable recovers in milliseconds.
+
+## fsync: The Real Cost
+
+There's a dirty secret in WAL implementations: **writing to a file doesn't mean the data is on disk.** The OS buffers writes in its page cache. If the machine loses power, that buffer is gone.
+
+The only guarantee is `fsync()` — which forces the OS to flush its buffers to the physical device. But fsync is expensive (2-10ms on SSDs, 10-50ms on HDDs).
+
+PenguinDB gives you the choice:
+
+```go
+type Options struct {
+    // SyncWrites calls fsync after every WAL write.
+    // Safest, but ~10x slower.
+    SyncWrites bool
+
+    // SyncInterval batches syncs on a timer.
+    // Default: 100ms. Balances durability and throughput.
+    SyncInterval time.Duration
+}
+```
+
+Most users should use `SyncInterval`. You risk losing at most ~100ms of writes in a crash, but you get ~10x higher write throughput. For financial data, set `SyncWrites: true`.
+
+## WAL Rotation
+
+You don't want a single ever-growing WAL file. PenguinDB rotates WAL segments:
+
+1. Each segment has a maximum size (default: 16MB)
+2. When a segment fills up, a new one is created
+3. When a memtable flush completes, all WAL segments that were fully covered by the flush are deleted
+4. On recovery, only non-deleted segments need to be replayed
+
+This keeps the WAL directory bounded and recovery fast.
+
+## Takeaways
+
+- A WAL converts the "volatile memtable" problem into "one sequential append" — the cheapest I/O operation
+- CRC checksums let you detect and skip partial writes from crashes
+- The fsync/throughput tradeoff is a knob, not a binary choice
+- WAL rotation keeps disk usage and recovery time bounded
+
+Next up: we'll look at **SSTable format and block compression** in PenguinDB.
