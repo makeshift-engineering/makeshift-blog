@@ -4,7 +4,7 @@
  * Future: base parts extract into @makeshift/ui/base.css
  */
 
-@import './design-tokens.css';
+@import "./design-tokens.css";
 
 /* ── Reset ── */
 *,
@@ -253,7 +253,7 @@ pre {
 
 .section-label::before,
 .section-label::after {
-  content: '';
+  content: "";
   flex: 1;
   height: 1px;
   background: var(--border);
@@ -321,8 +321,12 @@ pre {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .animate-in {

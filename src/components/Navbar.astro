@@ -2,33 +2,51 @@
 const currentPath = Astro.url.pathname;
 
 const navLinks = [
-  { href: '/', label: 'Blog', isInternal: true },
-  { href: 'https://makeshift.pro#projects', label: 'Projects', isInternal: false },
-  { href: 'https://makeshift.pro#about', label: 'About', isInternal: false },
-  { href: '/rss.xml', label: 'RSS', isInternal: true },
+  { href: "/", label: "Blog", isInternal: true },
+  {
+    href: "https://makeshift.pro#projects",
+    label: "Projects",
+    isInternal: false,
+  },
+  { href: "https://makeshift.pro#about", label: "About", isInternal: false },
+  { href: "/rss.xml", label: "RSS", isInternal: true },
 ];
 ---
 
 <nav class="navbar" id="main-nav">
   <div class="nav-inner container">
-    <a href="https://makeshift.pro" class="nav-logo" aria-label="Makeshift Engineering">
+    <a
+      href="https://makeshift.pro"
+      class="nav-logo"
+      aria-label="Makeshift Engineering"
+    >
       makeshift<span class="logo-dot">.</span>
     </a>
     <span class="nav-badge">blog</span>
 
     <div class="nav-links" id="nav-links">
-      {navLinks.map((link) => (
-        <a
-          href={link.href}
-          class:list={['nav-link', { active: link.isInternal && currentPath === link.href }]}
-          {...(!link.isInternal ? { target: '_blank', rel: 'noopener' } : {})}
-        >
-          {link.label}
-        </a>
-      ))}
+      {
+        navLinks.map((link) => (
+          <a
+            href={link.href}
+            class:list={[
+              "nav-link",
+              { active: link.isInternal && currentPath === link.href },
+            ]}
+            {...(!link.isInternal ? { target: "_blank", rel: "noopener" } : {})}
+          >
+            {link.label}
+          </a>
+        ))
+      }
     </div>
 
-    <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <button
+      class="nav-toggle"
+      id="nav-toggle"
+      aria-label="Toggle menu"
+      aria-expanded="false"
+    >
       <span class="toggle-bar"></span>
       <span class="toggle-bar"></span>
       <span class="toggle-bar"></span>
@@ -39,27 +57,29 @@ const navLinks = [
 <!-- Mobile menu overlay -->
 <div class="mobile-menu" id="mobile-menu">
   <div class="mobile-menu-inner">
-    {navLinks.map((link) => (
-      <a
-        href={link.href}
-        class="mobile-link"
-        {...(!link.isInternal ? { target: '_blank', rel: 'noopener' } : {})}
-      >
-        {link.label}
-      </a>
-    ))}
+    {
+      navLinks.map((link) => (
+        <a
+          href={link.href}
+          class="mobile-link"
+          {...(!link.isInternal ? { target: "_blank", rel: "noopener" } : {})}
+        >
+          {link.label}
+        </a>
+      ))
+    }
   </div>
 </div>
 
 <script>
-  const toggle = document.getElementById('nav-toggle');
-  const menu = document.getElementById('mobile-menu');
+  const toggle = document.getElementById("nav-toggle");
+  const menu = document.getElementById("mobile-menu");
 
-  toggle?.addEventListener('click', () => {
-    const isOpen = menu?.classList.toggle('open');
-    toggle.classList.toggle('open', isOpen);
-    toggle.setAttribute('aria-expanded', String(isOpen));
-    document.body.style.overflow = isOpen ? 'hidden' : '';
+  toggle?.addEventListener("click", () => {
+    const isOpen = menu?.classList.toggle("open");
+    toggle.classList.toggle("open", isOpen);
+    toggle.setAttribute("aria-expanded", String(isOpen));
+    document.body.style.overflow = isOpen ? "hidden" : "";
   });
 </script>
 
@@ -71,7 +91,7 @@ const navLinks = [
     right: 0;
     height: var(--nav-height);
     z-index: 100;
-    background: rgba(10, 10, 12, 0.8);
+    background: color-mix(in srgb, var(--bg-0) 80%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
@@ -177,7 +197,7 @@ const navLinks = [
     inset: 0;
     top: var(--nav-height);
     z-index: 99;
-    background: rgba(10, 10, 12, 0.95);
+    background: color-mix(in srgb, var(--bg-0) 95%, transparent);
     backdrop-filter: blur(20px);
     display: none;
     align-items: flex-start;

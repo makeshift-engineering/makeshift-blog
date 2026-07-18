@@ -9,8 +9,8 @@ tags: ["databases", "storage-engine", "go", "penguindb"]
 interactive: true
 ---
 
-import InteractiveWrapper from '../../components/interactive/InteractiveWrapper.tsx';
-import LSMTreeVisualization from '../../components/interactive/LSMTreeVisualization.tsx';
+import InteractiveWrapper from "../../../components/interactive/InteractiveWrapper.tsx";
+import LSMTreeVisualization from "./LSMTreeVisualization.tsx";
 
 Building a database engine means making hard choices about how data lives on disk. For [PenguinDB](https://github.com/makeshift-engineering/penguin-db), we chose an **LSM-tree** (Log-Structured Merge-tree) — the same architecture behind LevelDB, RocksDB, and Cassandra.
 
@@ -23,7 +23,7 @@ There are two dominant storage architectures for key-value stores:
 - **B-trees** — the classic. Great for read-heavy workloads, used in PostgreSQL, MySQL InnoDB.
 - **LSM-trees** — optimized for writes. Buffer writes in memory, flush sorted runs to disk.
 
-PenguinDB prioritizes **write throughput** and **sequential I/O**, making LSM-trees the natural fit. The key insight is simple: *random writes are slow, sequential writes are fast*. An LSM-tree converts random writes into sequential ones.
+PenguinDB prioritizes **write throughput** and **sequential I/O**, making LSM-trees the natural fit. The key insight is simple: _random writes are slow, sequential writes are fast_. An LSM-tree converts random writes into sequential ones.
 
 ## The Write Path
 
@@ -36,7 +36,10 @@ Every write in PenguinDB follows this path:
 
 Try it yourself — click "Write Entry" to see how data flows through the system:
 
-<InteractiveWrapper caption="Interactive LSM-tree write path visualization" client:visible>
+<InteractiveWrapper
+  caption="Interactive LSM-tree write path visualization"
+  client:visible
+>
   <LSMTreeVisualization client:visible />
 </InteractiveWrapper>
 
@@ -77,7 +80,7 @@ An SSTable is an **immutable, sorted file** on disk. It's the fundamental unit o
 
 - **Data blocks** — Key-value pairs, sorted by key, compressed per block.
 - **Index block** — Sparse index mapping key prefixes to data block offsets.
-- **Bloom filter** — Probabilistic structure to quickly determine if a key *might* exist.
+- **Bloom filter** — Probabilistic structure to quickly determine if a key _might_ exist.
 - **Footer** — Metadata pointing to the index and filter blocks.
 
 The sorted order is critical — it enables binary search for point lookups and efficient iteration for range scans.

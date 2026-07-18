@@ -1,0 +1,159 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PostCard from "../../components/PostCard.astro";
+import SectionDivider from "../../components/SectionDivider.astro";
+import CategoryBadge from "../../components/CategoryBadge.astro";
+import { getCollection } from "astro:content";
+
+export async function getStaticPaths() {
+  const categoryMeta: Record<string, { label: string; description: string }> = {
+    engineering: {
+      label: "Engineering",
+      description:
+        "Deep technical posts about systems, architecture, and implementation details.",
+    },
+    devlogs: {
+      label: "Devlogs",
+      description: "Development logs and progress updates from our projects.",
+    },
+    announcements: {
+      label: "Announcements",
+      description: "News, launches, and updates from Makeshift Engineering.",
+    },
+    "deep-dives": {
+      label: "Deep Dives",
+      description: "Exhaustive explorations of specific technical topics.",
+    },
+  };
+
+  return Object.entries(categoryMeta).map(([category, meta]) => ({
+    params: { category },
+    props: { meta },
+  }));
+}
+
+const { category } = Astro.params;
+const { meta } = Astro.props;
+
+const posts = (
+  await getCollection(
+    "blog",
+    ({ data }) => !data.draft && data.category === category
+  )
+).sort((a, b) => b.data.publishDate.valueOf() - a.data.publishDate.valueOf());
+
+function getReadTime(body: string | undefined): string {
+  const words = body?.split(/\s+/).length ?? 0;
+  return `${Math.max(1, Math.ceil(words / 200))} min read`;
+}
+---
+
+<BaseLayout
+  title={`${meta.label} — Makeshift Engineering Blog`}
+  description={meta.description}
+>
+  <section class="category-page">
+    <div class="container">
+      <a href="/categories" class="back-link">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path
+            d="M10 13L5 8L10 3"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+        </svg>
+        All categories
+      </a>
+
+      <div class="category-header animate-in">
+        <CategoryBadge category={category!} size="md" />
+        <h1 class="category-title">{meta.label}</h1>
+        <p class="category-description">{meta.description}</p>
+      </div>
+
+      <SectionDivider
+        label={`${posts.length} ${posts.length === 1 ? "post" : "posts"}`}
+      />
+
+      {
+        posts.length > 0 ? (
+          <div class="posts-list">
+            {posts.map((post) => (
+              <PostCard
+                title={post.data.title}
+                description={post.data.description}
+                publishDate={post.data.publishDate}
+                category={post.data.category}
+                slug={post.id}
+                readTime={getReadTime(post.body)}
+              />
+            ))}
+          </div>
+        ) : (
+          <p class="no-posts">No posts in this category yet.</p>
+        )
+      }
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .category-page {
+    padding: 2rem 0 4rem;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    color: var(--fg-3);
+    text-decoration: none;
+    margin-bottom: 2rem;
+    transition: color var(--duration-fast) var(--ease-out);
+  }
+
+  .back-link:hover {
+    color: var(--fg-0);
+  }
+
+  .category-header {
+    margin-bottom: 2rem;
+  }
+
+  .category-title {
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    color: var(--fg-0);
+    margin-top: 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .category-description {
+    font-size: 1.125rem;
+    color: var(--fg-2);
+    line-height: 1.7;
+    max-width: 600px;
+  }
+
+  .posts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .no-posts {
+    color: var(--fg-3);
+    font-size: 1rem;
+    padding: 2rem 0;
+  }
+
+  @media (max-width: 768px) {
+    .category-title {
+      font-size: 2.25rem;
+    }
+  }
+</style>

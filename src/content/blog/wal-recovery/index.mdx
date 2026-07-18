@@ -44,6 +44,7 @@ Each WAL entry in PenguinDB is a simple binary record:
 - **Key/Value** — The actual data, length-prefixed
 
 We chose a fixed-header format over something like protobuf for two reasons:
+
 1. Zero allocation parsing — we can validate the CRC without allocating
 2. Streaming reads — we know exactly how many bytes to read ahead
 
