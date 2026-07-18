@@ -32,7 +32,8 @@ const categoryColors: Record<
   },
 };
 
-const colors = categoryColors[category] ?? categoryColors.engineering;
+const colors =
+  categoryColors[category?.toLowerCase()] ?? categoryColors.engineering;
 ---
 
 <span

@@ -21,7 +21,7 @@ const navLinks = [
       aria-label="Makeshift Engineering"
     >
       <img src="/favicon.svg" alt="" class="logo-icon" />
-      blog<span class="logo-dot">.</span>
+      <div>blog<span class="logo-dot">.</span></div>
     </a>
 
     <div class="nav-links" id="nav-links">
@@ -75,11 +75,23 @@ const navLinks = [
   const toggle = document.getElementById("nav-toggle");
   const menu = document.getElementById("mobile-menu");
 
+  const closeMenu = () => {
+    menu?.classList.remove("open");
+    toggle?.classList.remove("open");
+    toggle?.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+  };
+
   toggle?.addEventListener("click", () => {
     const isOpen = menu?.classList.toggle("open");
     toggle.classList.toggle("open", isOpen);
     toggle.setAttribute("aria-expanded", String(isOpen));
     document.body.style.overflow = isOpen ? "hidden" : "";
+  });
+
+  // Close menu when a mobile link is clicked
+  menu?.querySelectorAll(".mobile-link").forEach((link) => {
+    link.addEventListener("click", closeMenu);
   });
 </script>
 
@@ -109,7 +121,7 @@ const navLinks = [
     align-items: center;
     gap: 0.5rem;
     font-family: var(--font-mono);
-    font-size: 1.125rem;
+    font-size: 1.5rem;
     font-weight: 600;
     color: var(--fg-0);
     text-decoration: none;
@@ -121,8 +133,8 @@ const navLinks = [
   }
 
   .logo-icon {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
     object-fit: contain;
   }
 

@@ -30,7 +30,7 @@ Makeshift Blog is designed to match the custom, dark-themed design language of t
 
 We follow a colocated content model. All media, components, and code related to a specific post live together inside that post's directory:
 
-```
+```plaintext
 makeshift-blog/
 ├── .github/workflows/
 │   ├── build.yml          # CI build workflow
@@ -70,6 +70,7 @@ bun --version
 
 1. Clone the repository and navigate to the directory:
    ```bash
+   git clone https://github.com/makeshift-engineering/makeshift-blog.git makeshift-blog
    cd makeshift-blog
    ```
 2. Install the required dependencies:
