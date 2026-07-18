@@ -136,3 +136,10 @@ The blog is optimized for deployment on Netlify using `@astrojs/netlify`. Netlif
 
 1. Push your changes to GitHub.
 2. Link the repository to your Netlify dashboard.
+3. Configure the environment variables for your Keystatic GitHub App in Netlify.
+
+---
+
+## 6. License
+
+This project is licensed under the **Makeshift Engineering Non-Commercial License**. You are free to clone and use this repository for personal, educational, and individual exploration, provided that you credit **Makeshift Engineering** and link back to [makeshift.pro](https://makeshift.pro). Commercial use is strictly prohibited. See the [LICENSE](LICENSE) file for the full license terms.
