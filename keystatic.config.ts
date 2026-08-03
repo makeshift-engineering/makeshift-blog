@@ -1,9 +1,16 @@
 import { config, collection, fields } from "@keystatic/core";
 
+const isProd = process.env.NODE_ENV === "production";
+
 export default config({
-  storage: {
-    kind: "local",
-  },
+  storage: isProd
+    ? {
+        kind: "github",
+        repo: "makeshift-engineering/makeshift-blog",
+      }
+    : {
+        kind: "local",
+      },
   collections: {
     blog: collection({
       label: "Blog Posts",
@@ -13,8 +20,22 @@ export default config({
       format: { contentField: "content" },
       schema: {
         title: fields.slug({ name: { label: "Title" } }),
-        description: fields.text({ label: "Description" }),
+        description: fields.text({
+          label: "Description",
+          validation: { isRequired: true },
+        }),
         publishDate: fields.date({ label: "Publish Date" }),
+        updatedDate: fields.date({ label: "Updated Date" }),
+        author: fields.text({
+          label: "Author",
+          defaultValue: "Makeshift Engineering",
+          validation: { isRequired: true },
+        }),
+        authorGithub: fields.text({
+          label: "Author GitHub Username",
+          defaultValue: "makeshift-engineering",
+          validation: { isRequired: true },
+        }),
         category: fields.select({
           label: "Category",
           options: [
@@ -35,6 +56,12 @@ export default config({
           publicPath: "../",
         }),
         draft: fields.checkbox({ label: "Draft", defaultValue: true }),
+        interactive: fields.checkbox({
+          label: "Interactive Post",
+          description:
+            "Enable if this post contains interactive React components",
+          defaultValue: false,
+        }),
         content: fields.mdx({
           label: "Content",
           options: {

@@ -55,6 +55,15 @@ const jsonLd =
           url: "https://makeshift.pro",
         },
       };
+
+// Script-safe JSON-LD serializer: escapes characters that could break out
+// of a <script> block or cause issues in HTML context (CWE-79)
+const safeJsonLd = JSON.stringify(jsonLd)
+  .replace(/</g, "\\u003c")
+  .replace(/>/g, "\\u003e")
+  .replace(/&/g, "\\u0026")
+  .replace(/\u2028/g, "\\u2028")
+  .replace(/\u2029/g, "\\u2029");
 ---
 
 <!-- Primary Meta -->
@@ -109,4 +118,5 @@ const jsonLd =
 }
 
 <!-- JSON-LD Structured Data -->
-<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+<script type="application/ld+json" set:html={safeJsonLd} />
+

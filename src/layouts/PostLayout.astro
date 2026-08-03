@@ -88,6 +88,14 @@ const nextPost = currentIndex > 0 ? allPosts[currentIndex - 1] : null;
             <p class="post-description">{description}</p>
 
             <div class="post-author">
+              <img
+                src={`https://github.com/${authorGithub}.png?size=64`}
+                alt={`${author}'s avatar`}
+                class="author-avatar"
+                width="28"
+                height="28"
+                loading="lazy"
+              />
               <span class="author-label">by</span>
               <a
                 href={`https://github.com/${authorGithub}`}
@@ -267,9 +275,20 @@ const nextPost = currentIndex > 0 ? allPosts[currentIndex - 1] : null;
   }
 
   .post-author {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     margin-top: 1rem;
     font-size: 0.875rem;
     color: var(--fg-3);
+  }
+
+  .author-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border-2);
+    object-fit: cover;
   }
 
   .author-label {
