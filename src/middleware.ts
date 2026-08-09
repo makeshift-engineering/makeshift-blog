@@ -68,7 +68,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
           Accept: "application/vnd.github+json",
           "X-GitHub-Api-Version": "2022-11-28",
         },
-      },
+      }
     );
 
     if (memberRes.status === 204) {
@@ -80,7 +80,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     cookies.delete("keystatic-gh-access-token", { path: "/" });
     return new Response(
       "Access denied. Only members of the makeshift-engineering organization can use the editor.",
-      { status: 403 },
+      { status: 403 }
     );
   } catch {
     // Network error talking to GitHub — fail open to avoid locking out
