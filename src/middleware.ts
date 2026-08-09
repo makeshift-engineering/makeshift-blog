@@ -13,7 +13,7 @@ const AUTH_PATHS = [
 
 const DENY_RESPONSE = new Response(
   "Access denied. Only members of the makeshift-engineering organization can use the editor.",
-  { status: 403 },
+  { status: 403 }
 );
 
 /**
@@ -80,7 +80,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
           "X-GitHub-Api-Version": "2022-11-28",
         },
         signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
-      },
+      }
     );
 
     if (memberRes.status === 204) {
