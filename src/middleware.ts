@@ -2,11 +2,19 @@ import { defineMiddleware } from "astro:middleware";
 
 const ALLOWED_ORG = "makeshift-engineering";
 
+/** Timeout for GitHub API calls (ms) */
+const GITHUB_API_TIMEOUT_MS = 5_000;
+
 // Paths that must remain open for the OAuth login flow to work
 const AUTH_PATHS = [
   "/api/keystatic/github/login",
   "/api/keystatic/github/oauth/callback",
 ];
+
+const DENY_RESPONSE = new Response(
+  "Access denied. Only members of the makeshift-engineering organization can use the editor.",
+  { status: 403 },
+);
 
 /**
  * Middleware that restricts Keystatic editor access to members of the
@@ -19,6 +27,8 @@ const AUTH_PATHS = [
  * 3. If a `keystatic-gh-access-token` cookie is present, uses it to
  *    query GitHub for the authenticated user and verify org membership.
  * 4. Non-members get a 403. Missing tokens redirect to the login flow.
+ * 5. Fails closed: any GitHub API error (rate-limit, network, timeout)
+ *    returns 403 rather than allowing unauthenticated access.
  */
 export const onRequest = defineMiddleware(async (context, next) => {
   const { url, cookies } = context;
@@ -49,12 +59,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
       },
+      signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
     });
 
     if (!userRes.ok) {
-      // Token expired or invalid — clear it and let Keystatic re-auth
+      // Token expired, invalid, or rate-limited — clear it and deny
       cookies.delete("keystatic-gh-access-token", { path: "/" });
-      return next();
+      return DENY_RESPONSE;
     }
 
     const user = (await userRes.json()) as { login: string };
@@ -68,7 +79,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
           Accept: "application/vnd.github+json",
           "X-GitHub-Api-Version": "2022-11-28",
         },
-      }
+        signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
+      },
     );
 
     if (memberRes.status === 204) {
@@ -78,14 +90,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     // Not a member (404) or other error — deny access
     cookies.delete("keystatic-gh-access-token", { path: "/" });
-    return new Response(
-      "Access denied. Only members of the makeshift-engineering organization can use the editor.",
-      { status: 403 }
-    );
+    return DENY_RESPONSE;
   } catch {
-    // Network error talking to GitHub — fail open to avoid locking out
-    // editors during transient API outages. The GitHub App's own repo-level
-    // permissions are the ultimate access gate.
-    return next();
+    // Network error or timeout talking to GitHub — fail closed.
+    // The editor is inaccessible until GitHub is reachable again,
+    // which is preferable to letting unauthenticated requests through.
+    return DENY_RESPONSE;
   }
 });

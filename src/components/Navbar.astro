@@ -82,12 +82,14 @@ const navLinks = [
     document.body.style.overflow = "";
   };
 
-  toggle?.addEventListener("click", () => {
-    const isOpen = menu?.classList.toggle("open");
-    toggle.classList.toggle("open", isOpen);
-    toggle.setAttribute("aria-expanded", String(isOpen));
-    document.body.style.overflow = isOpen ? "hidden" : "";
-  });
+  if (toggle && menu) {
+    toggle.addEventListener("click", () => {
+      const isOpen = menu.classList.toggle("open");
+      toggle.classList.toggle("open", isOpen);
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      document.body.style.overflow = isOpen ? "hidden" : "";
+    });
+  }
 
   // Close menu when a mobile link is clicked
   menu?.querySelectorAll(".mobile-link").forEach((link) => {
