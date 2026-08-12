@@ -15,7 +15,7 @@ const AUTH_PATHS = [
 function createDenyResponse() {
   return new Response(
     "Access denied. Only members of the makeshift-engineering organization can use the editor.",
-    { status: 403 },
+    { status: 403 }
   );
 }
 
