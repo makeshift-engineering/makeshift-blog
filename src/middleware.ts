@@ -11,12 +11,30 @@ const AUTH_PATHS = [
   "/api/keystatic/github/oauth/callback",
 ];
 
-/** Fresh 403 for every call — Response bodies are single-use streams. */
+/** 403 — confirmed invalid credentials or non-membership. */
 function createDenyResponse() {
   return new Response(
     "Access denied. Only members of the makeshift-engineering organization can use the editor.",
-    { status: 403 }
+    { status: 403 },
   );
+}
+
+/** 503 — GitHub unavailable; token is still valid, try again later. */
+function createUnavailableResponse() {
+  return new Response(
+    "Unable to verify organization membership. GitHub may be unavailable — please try again shortly.",
+    { status: 503, headers: { "Retry-After": "30" } },
+  );
+}
+
+/** True for status codes that indicate the token itself is bad. */
+function isInvalidCredentials(status: number): boolean {
+  return status === 401;
+}
+
+/** True for status codes that indicate a transient GitHub-side issue. */
+function isTransientFailure(status: number): boolean {
+  return status === 403 || status === 429 || status >= 500;
 }
 
 /**
@@ -30,8 +48,14 @@ function createDenyResponse() {
  * 3. If a `keystatic-gh-access-token` cookie is present, uses it to
  *    query GitHub for the authenticated user and verify org membership.
  * 4. Non-members get a 403. Missing tokens redirect to the login flow.
- * 5. Fails closed: any GitHub API error (rate-limit, network, timeout)
- *    returns 403 rather than allowing unauthenticated access.
+ * 5. Fails closed: any GitHub API error returns 403 or 503 rather than
+ *    allowing unauthenticated access.
+ *
+ * Cookie preservation policy:
+ * - Delete the cookie only for confirmed invalid credentials (401).
+ * - Preserve it for rate limits (403/429), upstream 5xx, timeouts,
+ *   and network errors so the user isn't forced to re-authenticate
+ *   when the problem is on GitHub's side.
  */
 export const onRequest = defineMiddleware(async (context, next) => {
   const { url, cookies } = context;
@@ -66,8 +90,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
 
     if (!userRes.ok) {
-      // Token expired, invalid, or rate-limited — clear it and deny
-      cookies.delete("keystatic-gh-access-token", { path: "/" });
+      if (isInvalidCredentials(userRes.status)) {
+        // Token is genuinely expired or revoked — delete and deny
+        cookies.delete("keystatic-gh-access-token", { path: "/" });
+        return createDenyResponse();
+      }
+      if (isTransientFailure(userRes.status)) {
+        // Rate-limited or GitHub is down — keep the token, retry later
+        return createUnavailableResponse();
+      }
+      // Unknown error — deny but preserve the token
       return createDenyResponse();
     }
 
@@ -83,7 +115,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
           "X-GitHub-Api-Version": "2022-11-28",
         },
         signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
-      }
+      },
     );
 
     if (memberRes.status === 204) {
@@ -91,13 +123,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return next();
     }
 
-    // Not a member (404) or other error — deny access
+    if (isTransientFailure(memberRes.status)) {
+      // Rate-limited or GitHub is down — keep the token, retry later
+      return createUnavailableResponse();
+    }
+
+    // 404 = confirmed non-member, or other non-transient error — deny
     cookies.delete("keystatic-gh-access-token", { path: "/" });
     return createDenyResponse();
   } catch {
-    // Network error or timeout talking to GitHub — fail closed.
-    // The editor is inaccessible until GitHub is reachable again,
-    // which is preferable to letting unauthenticated requests through.
-    return createDenyResponse();
+    // Network error or timeout — GitHub is unreachable.
+    // Preserve the token; return 503 so the editor can retry.
+    return createUnavailableResponse();
   }
 });
