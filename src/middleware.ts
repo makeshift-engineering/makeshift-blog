@@ -15,7 +15,7 @@ const AUTH_PATHS = [
 function createDenyResponse() {
   return new Response(
     "Access denied. Only members of the makeshift-engineering organization can use the editor.",
-    { status: 403 },
+    { status: 403 }
   );
 }
 
@@ -23,7 +23,7 @@ function createDenyResponse() {
 function createUnavailableResponse() {
   return new Response(
     "Unable to verify organization membership. GitHub may be unavailable — please try again shortly.",
-    { status: 503, headers: { "Retry-After": "30" } },
+    { status: 503, headers: { "Retry-After": "30" } }
   );
 }
 
@@ -115,7 +115,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
           "X-GitHub-Api-Version": "2022-11-28",
         },
         signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
-      },
+      }
     );
 
     if (memberRes.status === 204) {
