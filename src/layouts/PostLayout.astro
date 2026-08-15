@@ -1,0 +1,435 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import CategoryBadge from "../components/CategoryBadge.astro";
+import TableOfContents from "../components/TableOfContents.astro";
+import type { CollectionEntry } from "astro:content";
+import { getCollection } from "astro:content";
+
+interface Props {
+  entry: CollectionEntry<"blog">;
+  headings: { depth: number; slug: string; text: string }[];
+}
+
+const { entry, headings } = Astro.props;
+const {
+  title,
+  description,
+  publishDate,
+  updatedDate,
+  author,
+  authorGithub,
+  category,
+  tags,
+} = entry.data;
+
+const formattedDate = publishDate.toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+const updatedFormatted = updatedDate?.toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+// Rough read time: ~200 words per minute
+const wordCount = entry.body?.split(/\s+/).length ?? 0;
+const readTime = Math.max(1, Math.ceil(wordCount / 200));
+
+// Previous/Next post navigation
+const allPosts = (await getCollection("blog", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.publishDate.valueOf() - a.data.publishDate.valueOf()
+);
+
+const currentIndex = allPosts.findIndex((p) => p.id === entry.id);
+const prevPost =
+  currentIndex < allPosts.length - 1 ? allPosts[currentIndex + 1] : null;
+const nextPost = currentIndex > 0 ? allPosts[currentIndex - 1] : null;
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  ogType="article"
+  publishDate={publishDate}
+  author={author}
+>
+  <article class="post-page">
+    <div class="container">
+      <!-- Back link -->
+      <a href="/" class="back-link">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path
+            d="M10 13L5 8L10 3"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+        </svg>
+        All posts
+      </a>
+
+      <div class="post-layout">
+        <!-- Post content -->
+        <div class="post-main">
+          <!-- Header -->
+          <header class="post-header">
+            <div class="post-meta">
+              <CategoryBadge category={category} size="md" />
+              <span class="meta-sep">·</span>
+              <time datetime={publishDate.toISOString()}>{formattedDate}</time>
+              <span class="meta-sep">·</span>
+              <span>{readTime} min read</span>
+            </div>
+
+            <h1 class="post-title">{title}</h1>
+            <p class="post-description">{description}</p>
+
+            <div class="post-author">
+              <img
+                src={`https://github.com/${authorGithub}.png?size=64`}
+                alt={`${author}'s avatar`}
+                class="author-avatar"
+                width="28"
+                height="28"
+                loading="lazy"
+              />
+              <span class="author-label">by</span>
+              <a
+                href={`https://github.com/${authorGithub}`}
+                target="_blank"
+                rel="noopener"
+                class="author-link"
+              >
+                {author}
+              </a>
+            </div>
+
+            {
+              updatedFormatted && (
+                <p class="post-updated">Updated {updatedFormatted}</p>
+              )
+            }
+          </header>
+
+          <!-- Tags -->
+          {
+            tags.length > 0 && (
+              <div class="post-tags">
+                {tags.map((tag) => (
+                  <span class="tag">#{tag}</span>
+                ))}
+              </div>
+            )
+          }
+
+          <!-- Content -->
+          <div class="prose">
+            <slot />
+          </div>
+
+          <!-- Previous/Next navigation -->
+          <nav class="post-nav" aria-label="Post navigation">
+            <div class="post-nav-inner">
+              {
+                prevPost ? (
+                  <a
+                    href={`/blog/${prevPost.id}`}
+                    class="post-nav-link post-nav-prev"
+                  >
+                    <span class="post-nav-label">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                      >
+                        <path
+                          d="M10 13L5 8L10 3"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      Previous
+                    </span>
+                    <span class="post-nav-title">{prevPost.data.title}</span>
+                  </a>
+                ) : (
+                  <div />
+                )
+              }
+
+              {
+                nextPost ? (
+                  <a
+                    href={`/blog/${nextPost.id}`}
+                    class="post-nav-link post-nav-next"
+                  >
+                    <span class="post-nav-label">
+                      Next
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                      >
+                        <path
+                          d="M6 3L11 8L6 13"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span class="post-nav-title">{nextPost.data.title}</span>
+                  </a>
+                ) : (
+                  <div />
+                )
+              }
+            </div>
+          </nav>
+        </div>
+
+        <!-- Sidebar: Table of Contents -->
+        <aside class="post-sidebar">
+          <TableOfContents headings={headings} />
+        </aside>
+      </div>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .post-page {
+    padding: 2rem 0 4rem;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    color: var(--fg-3);
+    text-decoration: none;
+    margin-bottom: 2rem;
+    transition: color var(--duration-fast) var(--ease-out);
+  }
+
+  .back-link:hover {
+    color: var(--fg-0);
+  }
+
+  .post-layout {
+    display: grid;
+    grid-template-columns: 1fr 220px;
+    gap: 3rem;
+    align-items: start;
+  }
+
+  .post-main {
+    min-width: 0;
+  }
+
+  .post-header {
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .post-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+  }
+
+  .meta-sep {
+    color: var(--fg-3);
+    opacity: 0.5;
+  }
+
+  .post-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.2;
+    color: var(--fg-0);
+    margin-bottom: 0.75rem;
+  }
+
+  .post-description {
+    font-size: 1.125rem;
+    color: var(--fg-2);
+    line-height: 1.6;
+    max-width: 600px;
+  }
+
+  .post-author {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: var(--fg-3);
+  }
+
+  .author-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border-2);
+    object-fit: cover;
+  }
+
+  .author-label {
+    margin-right: 0.25rem;
+  }
+
+  .author-link {
+    color: var(--fg-1);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border-2);
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+
+  .author-link:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .post-updated {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--fg-3);
+    font-style: italic;
+  }
+
+  .post-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--fg-3);
+    background: var(--bg-2);
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+  }
+
+  .post-sidebar {
+    display: block;
+  }
+
+  /* Previous/Next navigation */
+  .post-nav {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .post-nav-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .post-nav-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.25rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--duration-base) var(--ease-out);
+  }
+
+  .post-nav-link:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-3);
+    transform: translateY(-1px);
+  }
+
+  .post-nav-next {
+    text-align: right;
+  }
+
+  .post-nav-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--fg-3);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .post-nav-next .post-nav-label {
+    justify-content: flex-end;
+  }
+
+  .post-nav-title {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--fg-1);
+    line-height: 1.4;
+    transition: color var(--duration-fast) var(--ease-out);
+  }
+
+  .post-nav-link:hover .post-nav-title {
+    color: var(--accent);
+  }
+
+  @media (max-width: 1024px) {
+    .post-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .post-sidebar {
+      display: none;
+    }
+
+    .post-title {
+      font-size: 2rem;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .post-title {
+      font-size: 1.75rem;
+    }
+
+    .post-description {
+      font-size: 1rem;
+    }
+
+    .post-nav-inner {
+      grid-template-columns: 1fr;
+    }
+
+    .post-nav-next {
+      text-align: left;
+    }
+
+    .post-nav-next .post-nav-label {
+      justify-content: flex-start;
+    }
+  }
+</style>

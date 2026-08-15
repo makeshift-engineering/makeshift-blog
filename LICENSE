@@ -1,0 +1,29 @@
+# Makeshift Engineering Non-Commercial License
+
+Copyright (c) 2026 Makeshift Engineering. All rights reserved.
+
+## License Terms
+
+This software and its associated documentation files (the "Software") are licensed under the following terms:
+
+### 1. Permitted Uses
+You are permitted to:
+* Clone and download the Software for personal, educational, and individual exploration.
+* Modify the Software for your own personal, non-commercial use.
+* Run the Software locally for personal, non-commercial development and testing.
+
+All permitted uses are subject to the **Attribution Requirement** outlined in Section 3 below.
+
+### 2. Prohibited Uses
+You are NOT permitted to:
+* Use the Software, or any derivative works thereof, for any commercial purposes (including but not limited to hosting, consulting, advertising, charging for access, or using it as a base for a commercial product or service).
+* Redistribute, publish, or sublicense the Software, modified or unmodified, for commercial gain.
+* Host a public instance of the Software for commercial purposes.
+
+### 3. Attribution & Credit
+If you clone, fork, modify, or reference any portion of this Software or its design system, you must provide clear and prominent attribution to **Makeshift Engineering** by:
+1. Retaining all copyright notices in the source files.
+2. Including a visible link to [makeshift.pro](https://makeshift.pro) in a prominent location (e.g., in your project's README or website footer) indicating that the project is based on Makeshift Engineering's work.
+
+### 4. Disclaimer of Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

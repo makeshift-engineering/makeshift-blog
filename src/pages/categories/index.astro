@@ -1,0 +1,176 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import CategoryBadge from "../../components/CategoryBadge.astro";
+import SectionDivider from "../../components/SectionDivider.astro";
+import { getCollection } from "astro:content";
+
+const allPosts = await getCollection("blog", ({ data }) => !data.draft);
+
+const categories = [
+  {
+    id: "engineering",
+    label: "Engineering",
+    description:
+      "Deep technical posts about systems, architecture, and implementation details.",
+  },
+  {
+    id: "devlogs",
+    label: "Devlogs",
+    description: "Development logs and progress updates from our projects.",
+  },
+  {
+    id: "announcements",
+    label: "Announcements",
+    description: "News, launches, and updates from Makeshift Engineering.",
+  },
+  {
+    id: "deep-dives",
+    label: "Deep Dives",
+    description: "Exhaustive explorations of specific technical topics.",
+  },
+] as const;
+
+const categoryCounts = categories.map((cat) => ({
+  ...cat,
+  count: allPosts.filter((p) => p.data.category === cat.id).length,
+}));
+---
+
+<BaseLayout
+  title="Categories — Makeshift Engineering Blog"
+  description="Browse blog posts by category: engineering, devlogs, announcements, and deep dives."
+>
+  <section class="categories-page">
+    <div class="container">
+      <div class="page-header animate-in">
+        <h1 class="page-title">Categories</h1>
+        <p class="page-description">Browse posts by topic.</p>
+      </div>
+
+      <SectionDivider label="all categories" />
+
+      <div class="categories-grid">
+        {
+          categoryCounts.map((cat) => (
+            <a href={`/categories/${cat.id}`} class="category-card">
+              <div class="category-card-header">
+                <CategoryBadge category={cat.id} size="md" />
+                <span class="category-count">
+                  {cat.count} {cat.count === 1 ? "post" : "posts"}
+                </span>
+              </div>
+              <p class="category-description">{cat.description}</p>
+              <div class="category-arrow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M6 3L11 8L6 13"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </div>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .categories-page {
+    padding: 5rem 0 4rem;
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    color: var(--fg-0);
+    margin-bottom: 0.75rem;
+  }
+
+  .page-description {
+    font-size: 1.125rem;
+    color: var(--fg-2);
+    line-height: 1.7;
+  }
+
+  .categories-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .category-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--duration-base) var(--ease-out);
+    position: relative;
+  }
+
+  .category-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+
+  .category-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .category-count {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--fg-3);
+  }
+
+  .category-description {
+    font-size: 0.9375rem;
+    color: var(--fg-2);
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  .category-arrow {
+    color: var(--fg-3);
+    align-self: flex-end;
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+
+  .category-card:hover .category-arrow {
+    color: var(--accent);
+    transform: translateX(4px);
+  }
+
+  @media (max-width: 768px) {
+    .categories-page {
+      padding: 3rem 0 3rem;
+    }
+
+    .page-title {
+      font-size: 2.25rem;
+    }
+
+    .categories-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,267 @@
+---
+const currentPath = Astro.url.pathname;
+
+const navLinks = [
+  { href: "/", label: "Blog", isInternal: true },
+  {
+    href: "https://makeshift.pro#projects",
+    label: "Projects",
+    isInternal: false,
+  },
+  { href: "https://makeshift.pro#about", label: "About", isInternal: false },
+  { href: "/rss.xml", label: "RSS", isInternal: true },
+];
+---
+
+<nav class="navbar" id="main-nav">
+  <div class="nav-inner container">
+    <a
+      href="https://makeshift.pro"
+      class="nav-logo"
+      aria-label="Makeshift Engineering"
+    >
+      <img src="/favicon.svg" alt="" class="logo-icon" />
+      <div>blog<span class="logo-dot">.</span></div>
+    </a>
+
+    <div class="nav-links" id="nav-links">
+      {
+        navLinks.map((link) => (
+          <a
+            href={link.href}
+            class:list={[
+              "nav-link",
+              { active: link.isInternal && currentPath === link.href },
+            ]}
+            {...(!link.isInternal ? { target: "_blank", rel: "noopener" } : {})}
+          >
+            {link.label}
+          </a>
+        ))
+      }
+    </div>
+
+    <button
+      class="nav-toggle"
+      id="nav-toggle"
+      aria-label="Toggle menu"
+      aria-expanded="false"
+    >
+      <span class="toggle-bar"></span>
+      <span class="toggle-bar"></span>
+      <span class="toggle-bar"></span>
+    </button>
+  </div>
+</nav>
+
+<!-- Mobile menu overlay -->
+<div class="mobile-menu" id="mobile-menu">
+  <div class="mobile-menu-inner">
+    {
+      navLinks.map((link) => (
+        <a
+          href={link.href}
+          class="mobile-link"
+          {...(!link.isInternal ? { target: "_blank", rel: "noopener" } : {})}
+        >
+          {link.label}
+        </a>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  const toggle = document.getElementById("nav-toggle");
+  const menu = document.getElementById("mobile-menu");
+
+  const closeMenu = () => {
+    menu?.classList.remove("open");
+    toggle?.classList.remove("open");
+    toggle?.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+  };
+
+  if (toggle && menu) {
+    toggle.addEventListener("click", () => {
+      const isOpen = menu.classList.toggle("open");
+      toggle.classList.toggle("open", isOpen);
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      document.body.style.overflow = isOpen ? "hidden" : "";
+    });
+  }
+
+  // Close menu when a mobile link is clicked
+  menu?.querySelectorAll(".mobile-link").forEach((link) => {
+    link.addEventListener("click", closeMenu);
+  });
+</script>
+
+<style>
+  .navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--nav-height);
+    z-index: 100;
+    background: color-mix(in srgb, var(--bg-0) 80%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    gap: 1rem;
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--fg-0);
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+
+  .nav-logo:hover {
+    color: var(--fg-0);
+  }
+
+  .logo-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    object-fit: contain;
+  }
+
+  .logo-dot {
+    color: var(--accent);
+  }
+
+  .nav-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    border: 1px solid rgba(146, 227, 169, 0.15);
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+    text-transform: lowercase;
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: auto;
+  }
+
+  .nav-link {
+    font-size: 0.875rem;
+    color: var(--fg-2);
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-sm);
+    transition: all var(--duration-fast) var(--ease-out);
+    text-decoration: none;
+  }
+
+  .nav-link:hover {
+    color: var(--fg-0);
+    background: var(--bg-2);
+  }
+
+  .nav-link.active {
+    color: var(--fg-0);
+  }
+
+  /* Mobile toggle */
+  .nav-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    margin-left: auto;
+  }
+
+  .toggle-bar {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: var(--fg-1);
+    border-radius: 1px;
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+
+  .nav-toggle.open .toggle-bar:nth-child(1) {
+    transform: rotate(45deg) translate(3px, 5px);
+  }
+
+  .nav-toggle.open .toggle-bar:nth-child(2) {
+    opacity: 0;
+  }
+
+  .nav-toggle.open .toggle-bar:nth-child(3) {
+    transform: rotate(-45deg) translate(3px, -5px);
+  }
+
+  /* Mobile menu */
+  .mobile-menu {
+    position: fixed;
+    inset: 0;
+    top: var(--nav-height);
+    z-index: 99;
+    background: color-mix(in srgb, var(--bg-0) 95%, transparent);
+    backdrop-filter: blur(20px);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 3rem;
+  }
+
+  .mobile-menu.open {
+    display: flex;
+  }
+
+  .mobile-menu-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 320px;
+    padding: 0 1.5rem;
+  }
+
+  .mobile-link {
+    font-size: 1.125rem;
+    color: var(--fg-1);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+
+  .mobile-link:hover {
+    color: var(--fg-0);
+    background: var(--bg-2);
+  }
+
+  @media (max-width: 768px) {
+    .nav-links {
+      display: none;
+    }
+
+    .nav-toggle {
+      display: flex;
+    }
+  }
+</style>

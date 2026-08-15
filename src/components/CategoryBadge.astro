@@ -1,0 +1,65 @@
+---
+interface Props {
+  category: string;
+  size?: "sm" | "md";
+}
+
+const { category, size = "sm" } = Astro.props;
+
+const categoryColors: Record<
+  string,
+  { bg: string; fg: string; border: string }
+> = {
+  engineering: {
+    bg: "rgba(146, 227, 169, 0.07)",
+    fg: "#92e3a9",
+    border: "rgba(146, 227, 169, 0.15)",
+  },
+  devlogs: {
+    bg: "rgba(94, 196, 182, 0.07)",
+    fg: "#5ec4b6",
+    border: "rgba(94, 196, 182, 0.15)",
+  },
+  announcements: {
+    bg: "rgba(167, 139, 250, 0.07)",
+    fg: "#a78bfa",
+    border: "rgba(167, 139, 250, 0.15)",
+  },
+  "deep-dives": {
+    bg: "rgba(251, 191, 36, 0.07)",
+    fg: "#fbbf24",
+    border: "rgba(251, 191, 36, 0.15)",
+  },
+};
+
+const colors =
+  categoryColors[category?.toLowerCase()] ?? categoryColors.engineering;
+---
+
+<span
+  class:list={["badge", `badge-${size}`]}
+  style={`background: ${colors.bg}; color: ${colors.fg}; border-color: ${colors.border};`}
+>
+  {category}
+</span>
+
+<style>
+  .badge {
+    font-family: var(--font-mono);
+    text-transform: lowercase;
+    letter-spacing: 0.03em;
+    border-radius: 999px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+
+  .badge-sm {
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.625rem;
+  }
+
+  .badge-md {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+  }
+</style>
