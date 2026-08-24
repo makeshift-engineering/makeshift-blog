@@ -24,16 +24,29 @@ export default config({
           label: "Description",
           validation: { isRequired: true },
         }),
-        publishDate: fields.date({ label: "Publish Date" }),
-        updatedDate: fields.date({ label: "Updated Date" }),
+        // Use datetime with { kind: 'now' } so new posts auto-fill to the
+        // current timestamp. The Astro schema coerces these to Date objects.
+        publishDate: fields.datetime({
+          label: "Publish Date",
+          defaultValue: { kind: "now" },
+          validation: { isRequired: true },
+        }),
+        updatedDate: fields.datetime({
+          label: "Updated Date",
+          description:
+            "Leave empty for new posts. Set when making significant edits.",
+        }),
+        // Author fields have no default — the editor must fill them in.
+        // In GitHub mode, these should match the logged-in user.
         author: fields.text({
           label: "Author",
-          defaultValue: "Makeshift Engineering",
+          description: "Your display name (e.g. Rahul Chakraborty)",
           validation: { isRequired: true },
         }),
         authorGithub: fields.text({
           label: "Author GitHub Username",
-          defaultValue: "makeshift-engineering",
+          description:
+            "Your GitHub username (e.g. rahulc0dy). Used for your avatar.",
           validation: { isRequired: true },
         }),
         category: fields.select({

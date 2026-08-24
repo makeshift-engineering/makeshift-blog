@@ -1,5 +1,6 @@
-import { defineCollection, z } from "astro:content";
+import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
+import { z } from "astro/zod";
 
 const blog = defineCollection({
   loader: glob({ pattern: "**/index.mdx", base: "./src/content/blog" }),
@@ -7,10 +8,12 @@ const blog = defineCollection({
     z.object({
       title: z.string(),
       description: z.string(),
+      // Coerce handles both ISO date strings (YYYY-MM-DD) from older posts
+      // and ISO datetime strings from Keystatic's fields.datetime.
       publishDate: z.coerce.date(),
       updatedDate: z.coerce.date().optional(),
-      author: z.string().default("Makeshift Engineering"),
-      authorGithub: z.string().default("makeshift-engineering"),
+      author: z.string(),
+      authorGithub: z.string(),
       category: z.enum([
         "engineering",
         "devlogs",
