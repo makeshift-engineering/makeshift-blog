@@ -17,6 +17,7 @@ heroImage: ../our-first-project-penguin-db/heroImage.png
 draft: false
 interactive: true
 ---
+
 We're excited (and a little nervous) to open up the repo for our first real project as Makeshift Engineering: **Penguin DB** - a database built from scratch in Go.
 
 **Repo:** [github.com/makeshift-engineering/penguin-db](https://github.com/makeshift-engineering/penguin-db/)
@@ -25,9 +26,9 @@ It's early. There's no tagged release yet, the issue tracker is more active than
 
 ## How it started
 
-*We were bored with building sloppy CRUD applications that just used simple REST APIs. It was time to dive into systems programming, or so we thought. What could be more system than a database management system. But we could just clone any open source database such as PostgreSQL or SQLite. We wanted to build something different, may be not so practical or ground breaking, but something that would challenge our skills.*&#x20;
+_We were bored with building sloppy CRUD applications that just used simple REST APIs. It was time to dive into systems programming, or so we thought. What could be more system than a database management system. But we could just clone any open source database such as PostgreSQL or SQLite. We wanted to build something different, may be not so practical or ground breaking, but something that would challenge our skills._&#x20;
 
-Every team that's spent enough time working with Postgres, MySQL, or whatever managed database sits behind their production stack eventually asks the same question: *what's actually happening in there?* Indexes, write-ahead logs, transaction isolation, query planning, most of us use these concepts daily without ever having built one ourselves.
+Every team that's spent enough time working with Postgres, MySQL, or whatever managed database sits behind their production stack eventually asks the same question: _what's actually happening in there?_ Indexes, write-ahead logs, transaction isolation, query planning, most of us use these concepts daily without ever having built one ourselves.
 
 Penguin DB started as an answer to that question. Rather than read about how a database works, we decided to build one, badly at first, then less badly, and to do it as our first public project so the process itself would be visible. Go felt like the right language for it: strong concurrency primitives for handling reads and writes safely, a small enough standard library that we couldn't hide behind magic, and fast enough compile times to keep the "change something, see if it breaks" loop tight.
 
@@ -48,9 +49,9 @@ That order isn't an accident. Each layer depends on the one below actually being
 
 Penguin DB isn't trying to out-perform Postgres or replace anything you already run in production. What we're optimizing for instead:
 
-* **Readability over cleverness.** The codebase is meant to be something a curious engineer can actually read start to finish and come away understanding how a database works, not just how *this* database works.
-* **Documented internals.** The `docs/` folder tracks design decisions as we make them, not just usage instructions after the fact. If we changed our mind about something, we want that reasoning visible.
-* **Built in the open, including the messy parts.** Open issues, an active pull request, and design debates all live in the repo. We're not going to clean the story up before showing it to anyone.
+- **Readability over cleverness.** The codebase is meant to be something a curious engineer can actually read start to finish and come away understanding how a database works, not just how _this_ database works.
+- **Documented internals.** The `docs/` folder tracks design decisions as we make them, not just usage instructions after the fact. If we changed our mind about something, we want that reasoning visible.
+- **Built in the open, including the messy parts.** Open issues, an active pull request, and design debates all live in the repo. We're not going to clean the story up before showing it to anyone.
 
 ## What's next
 
