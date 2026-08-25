@@ -1,0 +1,61 @@
+---
+title: Our First Project - PenguinDB
+description: >-
+  PenguinDB is the first project under the Makeshift Engineering organisation. A
+  custom database built from scratch, that is SQL compliant but stores key value
+  pairs for speed.
+publishDate: 2026-08-24T21:55:00.000Z
+updatedDate: 2026-08-25T15:25:00.000Z
+author: Makeshift Engineering
+authorGithub: makeshift-engineering
+category: announcements
+tags:
+  - penguin-db
+  - golang
+  - engineering
+heroImage: ../our-first-project-penguin-db/heroImage.png
+draft: false
+interactive: true
+---
+We're excited (and a little nervous) to open up the repo for our first real project as Makeshift Engineering: **Penguin DB** - a database built from scratch in Go.
+
+**Repo:** [github.com/makeshift-engineering/penguin-db](https://github.com/makeshift-engineering/penguin-db/)
+
+It's early. There's no tagged release yet, the issue tracker is more active than the changelog, and half the fun so far has been arguing about design decisions in pull request comments. But we wanted to write this down now, while the project is still small enough to explain in one sitting, partly as a record for ourselves, and partly as an invitation for anyone who wants to follow along or dig in.
+
+## How it started
+
+*We were bored with building sloppy CRUD applications that just used simple REST APIs. It was time to dive into systems programming, or so we thought. What could be more system than a database management system. But we could just clone any open source database such as PostgreSQL or SQLite. We wanted to build something different, may be not so practical or ground breaking, but something that would challenge our skills.*&#x20;
+
+Every team that's spent enough time working with Postgres, MySQL, or whatever managed database sits behind their production stack eventually asks the same question: *what's actually happening in there?* Indexes, write-ahead logs, transaction isolation, query planning, most of us use these concepts daily without ever having built one ourselves.
+
+Penguin DB started as an answer to that question. Rather than read about how a database works, we decided to build one, badly at first, then less badly, and to do it as our first public project so the process itself would be visible. Go felt like the right language for it: strong concurrency primitives for handling reads and writes safely, a small enough standard library that we couldn't hide behind magic, and fast enough compile times to keep the "change something, see if it breaks" loop tight.
+
+## The plan
+
+We didn't want to boil the ocean, so the project is scoped in layers, roughly in the order we're building them:
+
+1. **Storage engine**: the on-disk format for reading and writing data reliably, including a write-ahead log (WAL) so we don't lose data on crash.
+2. **Indexing**: starting with a straightforward tree-based index so lookups don't mean scanning every record.
+3. **Query layer**: a minimal way to ask the database for data without touching the storage engine directly.
+4. **API**: an SQL compliant service so Penguin DB can be talked to with standard SQL commands.
+5. **CLI tooling**: a command-line client for poking at the database directly, useful for both us and anyone trying it out.
+6. **Tests, all the way down**: every layer above gets exercised by the test suite before we consider it "done."
+
+That order isn't an accident. Each layer depends on the one below actually being trustworthy, and we'd rather have a small database that doesn't lose your data than a feature-rich one that occasionally does.
+
+## What's (going to be) unique about it
+
+Penguin DB isn't trying to out-perform Postgres or replace anything you already run in production. What we're optimizing for instead:
+
+* **Readability over cleverness.** The codebase is meant to be something a curious engineer can actually read start to finish and come away understanding how a database works, not just how *this* database works.
+* **Documented internals.** The `docs/` folder tracks design decisions as we make them, not just usage instructions after the fact. If we changed our mind about something, we want that reasoning visible.
+* **Built in the open, including the messy parts.** Open issues, an active pull request, and design debates all live in the repo. We're not going to clean the story up before showing it to anyone.
+
+## What's next
+
+Right now there are open issues covering everything from storage internals to API surface, and we're actively working through them. If you're the kind of person who's ever wanted to know what's really going on under `INSERT INTO`, take a look, open an issue, or send a PR, we'd genuinely like the company.
+
+[github.com/makeshift-engineering/penguin-db](https://github.com/makeshift-engineering/penguin-db/)
+
+More updates as the storage engine and indexing layers solidify. Thanks for reading our first post, here's to many more.
