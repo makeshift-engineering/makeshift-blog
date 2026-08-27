@@ -140,11 +140,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     // 2. Is this user a member of the allowed org?
-    //    Using /user/memberships/orgs/{org} — the authenticated user checks
-    //    their OWN membership.  Returns 200 with { state, role } for members,
-    //    404 for non-members.  No 302 ambiguity.
-    const memberRes = await fetch(
-      `https://api.github.com/user/memberships/orgs/${ALLOWED_ORG}`,
+    //    Using GET /user/orgs — lists all orgs the authenticated user
+    //    belongs to.  Works with any valid token (no special scopes or
+    //    GitHub App permissions required).  We check whether the
+    //    allowed org appears in the returned list.
+    const orgsRes = await fetch(
+      "https://api.github.com/user/orgs?per_page=100",
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -156,10 +157,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
       }
     );
 
-    if (memberRes.ok) {
-      const membership = (await memberRes.json()) as { state: string };
-      if (membership.state === "active") {
-        // Confirmed active org member — store user info for author fields
+    if (orgsRes.ok) {
+      const orgs = (await orgsRes.json()) as { login: string }[];
+      const isMember = orgs.some(
+        (org) => org.login.toLowerCase() === ALLOWED_ORG.toLowerCase()
+      );
+
+      if (isMember) {
+        // Confirmed org member — store user info for author fields.
         // These are non-httpOnly so Keystatic's client JS can read them.
         cookies.set("ks-gh-login", user.login, {
           path: "/",
@@ -175,16 +180,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
         });
         return next();
       }
-      // state is "pending" — user was invited but hasn't accepted yet
+
+      // User is authenticated but not a member of the allowed org
       return createDenyResponse();
     }
 
-    if (memberRes.status === 404) {
-      // Confirmed non-member
-      return createDenyResponse();
-    }
-
-    if (isTransientFailure(memberRes.status)) {
+    if (isTransientFailure(orgsRes.status)) {
       // Rate-limited or GitHub is down — keep the token, retry later
       return createUnavailableResponse();
     }
