@@ -11,11 +11,29 @@ const AUTH_PATHS = [
   "/api/keystatic/github/oauth/callback",
 ];
 
+/**
+ * Build a Set-Cookie header value that immediately expires a cookie.
+ * This is used to ensure cookie deletion actually reaches the browser,
+ * even when returning a raw Response from middleware.
+ */
+function expireCookie(name: string): string {
+  return `${name}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+/** All cookies that should be cleared when denying access. */
+function deletionHeaders(): HeadersInit {
+  return [
+    ["Set-Cookie", expireCookie("keystatic-gh-access-token")],
+    ["Set-Cookie", expireCookie("ks-gh-login")],
+    ["Set-Cookie", expireCookie("ks-gh-name")],
+  ];
+}
+
 /** 403 — confirmed invalid credentials or non-membership. */
 function createDenyResponse() {
   return new Response(
     "Access denied. Only members of the makeshift-engineering organization can use the editor.",
-    { status: 403 }
+    { status: 403, headers: deletionHeaders() }
   );
 }
 
@@ -52,10 +70,23 @@ function isTransientFailure(status: number): boolean {
  *    allowing unauthenticated access.
  *
  * Cookie preservation policy:
- * - Delete the cookie only for confirmed invalid credentials (401).
+ * - Delete the cookie only for confirmed invalid credentials (401)
+ *   or confirmed non-membership.
  * - Preserve it for rate limits (403/429), upstream 5xx, timeouts,
  *   and network errors so the user isn't forced to re-authenticate
  *   when the problem is on GitHub's side.
+ *
+ * Org membership strategy:
+ * - Uses GET /user/memberships/orgs/{org} so the authenticated user
+ *   checks their OWN membership.  This avoids the 302-redirect
+ *   ambiguity of GET /orgs/{org}/members/{username} which requires
+ *   the requester to already be a confirmed org member and returns
+ *   a 302 (silently followed by fetch) when they are not.
+ *
+ * Author auto-fill:
+ * - On successful verification, stores the GitHub user's login and
+ *   display name in ks-gh-login / ks-gh-name cookies so the
+ *   Keystatic editor can use them as default values for author fields.
  */
 export const onRequest = defineMiddleware(async (context, next) => {
   const { url, cookies } = context;
@@ -86,41 +117,71 @@ export const onRequest = defineMiddleware(async (context, next) => {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
       },
+      redirect: "manual",
       signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
     });
 
     if (!userRes.ok) {
       if (isInvalidCredentials(userRes.status)) {
         // Token is genuinely expired or revoked — delete and deny
-        cookies.delete("keystatic-gh-access-token", { path: "/" });
         return createDenyResponse();
       }
       if (isTransientFailure(userRes.status)) {
         // Rate-limited or GitHub is down — keep the token, retry later
         return createUnavailableResponse();
       }
-      // Unknown error — deny but preserve the token
+      // Unknown error — deny and clear tokens
       return createDenyResponse();
     }
 
-    const user = (await userRes.json()) as { login: string };
+    const user = (await userRes.json()) as {
+      login: string;
+      name: string | null;
+    };
 
     // 2. Is this user a member of the allowed org?
+    //    Using /user/memberships/orgs/{org} — the authenticated user checks
+    //    their OWN membership.  Returns 200 with { state, role } for members,
+    //    404 for non-members.  No 302 ambiguity.
     const memberRes = await fetch(
-      `https://api.github.com/orgs/${ALLOWED_ORG}/members/${user.login}`,
+      `https://api.github.com/user/memberships/orgs/${ALLOWED_ORG}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github+json",
           "X-GitHub-Api-Version": "2022-11-28",
         },
+        redirect: "manual",
         signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
       }
     );
 
-    if (memberRes.status === 204) {
-      // Confirmed org member — allow through
-      return next();
+    if (memberRes.ok) {
+      const membership = (await memberRes.json()) as { state: string };
+      if (membership.state === "active") {
+        // Confirmed active org member — store user info for author fields
+        // These are non-httpOnly so Keystatic's client JS can read them.
+        cookies.set("ks-gh-login", user.login, {
+          path: "/",
+          sameSite: "lax",
+          secure: true,
+          maxAge: 60 * 60 * 8, // 8 hours
+        });
+        cookies.set("ks-gh-name", user.name ?? user.login, {
+          path: "/",
+          sameSite: "lax",
+          secure: true,
+          maxAge: 60 * 60 * 8, // 8 hours
+        });
+        return next();
+      }
+      // state is "pending" — user was invited but hasn't accepted yet
+      return createDenyResponse();
+    }
+
+    if (memberRes.status === 404) {
+      // Confirmed non-member
+      return createDenyResponse();
     }
 
     if (isTransientFailure(memberRes.status)) {
@@ -128,8 +189,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return createUnavailableResponse();
     }
 
-    // 404 = confirmed non-member, or other non-transient error — deny
-    cookies.delete("keystatic-gh-access-token", { path: "/" });
+    // Any other error — deny and clear tokens
     return createDenyResponse();
   } catch {
     // Network error or timeout — GitHub is unreachable.
