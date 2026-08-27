@@ -2,6 +2,18 @@ import { config, collection, fields } from "@keystatic/core";
 
 const isProd = process.env.NODE_ENV === "production";
 
+/**
+ * Read a cookie value by name from document.cookie.
+ * Returns undefined when running server-side or when the cookie is absent.
+ */
+function getCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(
+    new RegExp(`(?:^|;\\s*)${name}=([^;]*)`)
+  );
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 export default config({
   storage: isProd
     ? {
@@ -36,17 +48,20 @@ export default config({
           description:
             "Leave empty for new posts. Set when making significant edits.",
         }),
-        // Author fields have no default — the editor must fill them in.
-        // In GitHub mode, these should match the logged-in user.
+        // Author fields default to the authenticated GitHub user's info.
+        // The middleware stores ks-gh-name and ks-gh-login cookies after
+        // verifying org membership.
         author: fields.text({
           label: "Author",
           description: "Your display name (e.g. Rahul Chakraborty)",
+          defaultValue: getCookie("ks-gh-name") ?? "",
           validation: { isRequired: true },
         }),
         authorGithub: fields.text({
           label: "Author GitHub Username",
           description:
             "Your GitHub username (e.g. rahulc0dy). Used for your avatar.",
+          defaultValue: getCookie("ks-gh-login") ?? "",
           validation: { isRequired: true },
         }),
         category: fields.select({
