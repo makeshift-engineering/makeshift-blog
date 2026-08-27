@@ -134,7 +134,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return createDenyResponse();
     }
 
-    const user = (await userRes.json()) as { login: string; name: string | null };
+    const user = (await userRes.json()) as {
+      login: string;
+      name: string | null;
+    };
 
     // 2. Is this user a member of the allowed org?
     //    Using /user/memberships/orgs/{org} — the authenticated user checks
