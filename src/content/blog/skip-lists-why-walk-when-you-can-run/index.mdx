@@ -1,0 +1,158 @@
+---
+title: "Skip Lists: Why Walk When You Can Run?"
+description: "Explore skip lists, a probabilistic data structure that makes sorted linked lists fast using randomly generated express lanes. Learn how coin flips determine node heights, how search, insertion, and deletion work, and why skip lists achieve expected O(log n) performance."
+publishDate: 2026-10-19T12:00:00.000Z
+author: "Saptak Manna"
+authorGithub: "theMr17"
+category: "deep-dives"
+tags: ["penguin-db", "golang", "skip-list", "data-structures"]
+draft: false
+interactive: true
+---
+
+import CoinFlipTower from "./CoinFlipTower.tsx";
+import SearchRace from "./SearchRace.tsx";
+import SkipListLab from "./SkipListLab.tsx";
+import SubwayTrick from "./SubwayTrick.tsx";
+
+## TL;DR
+
+- A **skip list** is a sorted linked list where some nodes get "express lane" pointers that skip ahead. Search drops from `O(n)` to expected `O(log n)`.
+- Each node's tower height is decided by **coin flips**: heads, grow a level; tails, stop. Half the nodes are 1 tall, a quarter are 2 tall, an eighth are 3 tall, and so on.
+- **Search rule:** on each lane, hop right while the next key is smaller than your target. When you can't, drop down a lane. At the bottom you're standing right next to your answer.
+- **Insert** = search, remembering the last node on every lane (the _predecessors_), then splice the new node in with two pointer writes per level.
+- No rotations, no rebalancing, no scary invariants. That's why Penguin DB uses one, and why the Go implementation is only about 280 lines.
+- Below you can flip coins, race a skip list against a plain linked list, and step through search, insert and delete one pointer at a time.
+
+## The problem: keep things sorted, but fast
+
+Say you want a collection that stays sorted, and you want to look things up, insert things and delete things quickly. The usual suspects all have a catch:
+
+- A **sorted array** finds things quickly (binary search) but inserting in the middle means shifting everything after it.
+- A **sorted linked list** inserts in a blink once you're in the right spot, but getting to the right spot means walking the list from the start.
+- A **balanced tree** (AVL, red-black) is great on paper, but the rebalancing logic is where bugs go to live.
+
+A skip list says: what if we keep the linked list, and just add some shortcuts?
+
+## The art of skipping nodes
+
+Picture a subway line with 100 stops. The local train stops at every station. Slow, but it gets you everywhere. Now add an express train that only stops at every 10th station.
+
+To get to stop 87, you don't ride the local the whole way. You take the express to stop 80, hop off, and ride the local for the last 7. Add a super-express that stops every 50th station and it gets even better: super-express to 50, express to 80, local to 87.
+
+That's the whole idea. Each **lane** is a linked list, and each lane is a sparser version of the one below it. The bottom lane holds every node.
+
+<SubwayTrick client:visible />
+
+Here's a race. Same keys, two data structures. Hit the buttons, then crank the list size up.
+
+<SearchRace client:visible />
+
+At 2,048 items the linked list averages around a thousand comparisons. The skip list barely breaks twenty. And notice how it behaves as the list grows: quadruple the size and the skip list only gains a handful of steps.
+
+## Anatomy of a node
+
+Here's the node in Penguin DB's skip list (simplified):
+
+```go title="node.go"
+type node struct {
+	data   int
+	next  []*node // the tower: one forward pointer per lane
+}
+```
+
+The only interesting field is `next`. It's a slice, and its **length is the node's height**. A node of height 3 has pointers for lanes 0, 1 and 2. Lane 0 links to the next node in order, lane 1 links to the next node _tall enough to be on lane 1_, and so on.
+
+The list also has a **head sentinel**: a fake node with no data and a full-height tower. It exists so every lane has a starting point, and you'll see the penguin start from it in the lab below.
+
+```go
+headNode: newNode(nil, maxLevel),
+```
+
+## Who gets to be tall? Coin flips.
+
+Here's the neat part: nobody plans the express lanes. When a node is inserted, we roll for its height:
+
+```go title="skiplist.go"
+func (skipList *SkipList) randomLevel() int {
+	level := 1
+	for rand.Float32() < 0.5 && level < skipList.maxLevel {
+		level++
+	}
+	return level
+}
+```
+
+Everyone starts at height 1. Then flip a coin: heads and you grow a level, tails and you stop. Half the nodes stay at 1, a quarter reach 2, an eighth reach 3. The `maxLevel` check is just a safety cap so a freak streak of heads can't build a 60-story tower.
+
+Play with it. Build one tower, then build a thousand and watch the bars settle onto the expected percentages:
+
+<CoinFlipTower client:visible />
+
+Why does this work? Because each lane ends up holding about **half** the nodes of the lane below it. That's exactly the "every 2nd station" shape from the subway, except nobody had to sit down and design it. Randomness gives us the same balance a tree would, for free, on average.
+
+On average, a node ends up with 2 pointers (1 + ½ + ¼ + ... = 2), so the whole thing costs roughly twice the pointers of a plain linked list. Not a bad deal.
+
+## The lab: watch the penguin search
+
+Time to see the real thing. Below is the same algorithm as Penguin DB's `findPredecessors`, running on a small list. The 🐧 is the "current node" pointer. The code panel highlights the exact line being executed.
+
+The rule is simple:
+
+1. Start on the top lane at the head.
+2. Look at the next node on this lane. If its key is **smaller than your target**, hop onto it.
+3. If it's not (or it's nil), you've gone as far as this lane can take you. Remember where you are, and **drop down one lane**.
+4. Repeat. When you reach the bottom lane, the next node is either your key or the spot where it would go.
+
+Try **Search** first. Search for 24, then 22 (which isn't in the list), then 58. Watch how few nodes get touched.
+
+<SkipListLab client:visible />
+
+A few things to notice while you play:
+
+- The penguin only ever moves **right** or **down**. It never backs up. That's what makes the search so cheap.
+- The strict `<` is doing real work. The walk stops _on the last node smaller than the target_, so the bottom lane's next pointer is the first node `>=` target. One loop gives you "found it" and "here's where it goes".
+- Ending up exactly on a node is not required. Searching for 22 lands between 18 and 24, and that's the answer: "not here, but this is the slot."
+
+### Insert: search, then splice
+
+Inserting is a search with a memory. While descending, the code records the last node it stood on at each lane, the **predecessors**:
+
+```go
+predecessors[level] = currentNode
+```
+
+Those are the only nodes whose pointers need to change. Then comes the actual insert:
+
+```go title="skiplist.go"
+for level := 0; level < newNodeHeight; level++ {
+	newNode.next[level] = predecessors[level].next[level]
+	predecessors[level].next[level] = newNode
+}
+```
+
+That's the classic linked-list splice (point the new node at the old next, point the old node at the new one), done once per lane the new node lives on. If the new tower is taller than anything seen so far, the head becomes the predecessor for the new lanes and `highestActiveLevel` goes up.
+
+Go back to the lab and try **Insert** with 22. Then set the height dropdown to **5** and insert 50, to see the whole structure get a brand new top lane. Insert with random heights a few times and see how the shape changes.
+
+### Delete: the reverse splice
+
+Deleting is the same dance backwards: find the predecessors, then make each one skip over the target. Try **Delete** on 37, the tallest tower, and watch it come out lane by lane.
+
+One honest note: Penguin DB itself doesn't unlink nodes on delete. Since it's a database buffer, it marks nodes as deleted instead (a tombstone) and keeps them around. A general-purpose skip list unlinks them like the lab shows.
+
+## Why is it O(log n)?
+
+Here's a hand-wavy argument I like, because it's fun. Imagine searching _backwards_: you're at the bottom of the node you found, and you retrace the path to the top-left corner.
+
+At each step, you either came from the **left** or from **above**. And since a node's tower height was a coin flip, "is there a level above me?" is itself a coin flip. So at every step it's about 50/50: left, or up.
+
+You need to climb about `log₂ n` levels in total (that's how tall the list is), and every climb costs about 2 steps on average (one up, plus on average one left). That gives roughly `2·log₂ n` steps. For 2,048 items that's about 22, which is exactly what the race above shows you.
+
+Is it a guarantee? No. A really unlucky roll could produce a lopsided list. In practice the odds of anything dramatic shrink so fast that it basically never matters.
+
+## Go break it
+
+You can read the whole thing in about ten minutes: <a href="https://github.com/makeshift-engineering/penguin-db/tree/main/internal/storage/memtable" target="_blank" rel="noopener noreferrer"><code>internal/storage/memtable</code></a>. Start with <a href="https://github.com/makeshift-engineering/penguin-db/blob/main/internal/storage/memtable/skiplist.go" target="_blank" rel="noopener noreferrer"><code>skiplist.go</code></a>, and keep the lab open in another tab.
+
+If you find something to improve, we'd love a PR.
