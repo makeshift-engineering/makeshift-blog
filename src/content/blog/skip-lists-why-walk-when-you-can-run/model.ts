@@ -3,7 +3,7 @@
  *
  * A skip list's lanes are just "every node whose tower is tall enough, in key
  * order", so the whole structure is a sorted array of { key, height }.
- * buildFrames() replays penguin-db's findPredecessors / insertNode logic and
+ * buildFrames() replays the textbook search / insert / delete steps and
  * records one Frame per teachable moment.
  */
 
@@ -45,33 +45,33 @@ export interface Frame {
 }
 
 export const FIND_CODE = [
-  "for level := skipList.highestActiveLevel - 1; level >= 0; level-- {",
-  "    nextNode := currentNode.next[level]",
-  "    for nextNode != nil && bytes.Compare(nextNode.key, key) < 0 {",
-  "        currentNode = nextNode",
-  "        nextNode = currentNode.next[level]",
+  "for lvl := s.level - 1; lvl >= 0; lvl-- {",
+  "    next := cur.next[lvl]",
+  "    for next != nil && next.key < key {",
+  "        cur = next",
+  "        next = cur.next[lvl]",
   "    }",
-  "    predecessors[level] = currentNode",
+  "    preds[lvl] = cur",
   "}",
-  "return predecessors, currentNode.next[0]",
+  "return preds, cur.next[0]",
 ];
 
 export const INSERT_CODE = [
-  "newNodeHeight := skipList.randomLevel()",
-  "if newNodeHeight > skipList.highestActiveLevel {",
+  "h := randomLevel()",
+  "if h > s.level {",
   "    // taller than ever: the head is the predecessor up there",
-  "    skipList.highestActiveLevel = newNodeHeight",
+  "    s.level = h",
   "}",
-  "for level := 0; level < newNodeHeight; level++ {",
-  "    newNode.next[level] = predecessors[level].next[level]",
-  "    predecessors[level].next[level] = newNode",
+  "for lvl := 0; lvl < h; lvl++ {",
+  "    n.next[lvl] = preds[lvl].next[lvl]",
+  "    preds[lvl].next[lvl] = n",
   "}",
 ];
 
 export const DELETE_CODE = [
-  "// sketch of a classic unlink (penguin-db tombstones instead)",
-  "for level := len(target.next) - 1; level >= 0; level-- {",
-  "    predecessors[level].next[level] = target.next[level]",
+  "// unlink the target from every lane it lives on",
+  "for lvl := len(target.next) - 1; lvl >= 0; lvl-- {",
+  "    preds[lvl].next[lvl] = target.next[lvl]",
   "}",
 ];
 
