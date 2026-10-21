@@ -22,15 +22,22 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
         <span class="toc-label">// on this page</span>
       </div>
       <nav>
-        <ul class="toc-list">
-          {filteredHeadings.map((heading) => (
-            <li class:list={["toc-item", `toc-depth-${heading.depth}`]}>
-              <a href={`#${heading.slug}`} class="toc-link" data-heading-slug={heading.slug}>
-                {heading.text}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <div class="toc-track">
+          <div class="toc-indicator" id="toc-indicator" />
+          <ul class="toc-list">
+            {filteredHeadings.map((heading) => (
+              <li class:list={["toc-item", `toc-depth-${heading.depth}`]}>
+                <a
+                  href={`#${heading.slug}`}
+                  class="toc-link"
+                  data-heading-slug={heading.slug}
+                >
+                  {heading.text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
       </nav>
     </aside>
   )
@@ -38,8 +45,11 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 
 <script>
   function initTocHighlight() {
-    const tocLinks = document.querySelectorAll<HTMLAnchorElement>('.toc-link[data-heading-slug]');
-    if (tocLinks.length === 0) return;
+    const tocLinks = document.querySelectorAll<HTMLAnchorElement>(
+      ".toc-link[data-heading-slug]"
+    );
+    const indicator = document.getElementById("toc-indicator");
+    if (tocLinks.length === 0 || !indicator) return;
 
     const slugs = Array.from(tocLinks).map((link) => link.dataset.headingSlug!);
     const headingElements = slugs
@@ -53,39 +63,40 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     function setActive(slug: string | null) {
       if (slug === activeSlug) return;
       activeSlug = slug;
+
       tocLinks.forEach((link) => {
         const isActive = link.dataset.headingSlug === slug;
-        link.classList.toggle('active', isActive);
+        link.classList.toggle("active", isActive);
       });
+
+      // Move the indicator to the active link
+      if (slug) {
+        const activeLink = document.querySelector<HTMLAnchorElement>(
+          `.toc-link[data-heading-slug="${slug}"]`
+        );
+        if (activeLink) {
+          const track = activeLink.closest(".toc-track") as HTMLElement;
+          if (track) {
+            const trackRect = track.getBoundingClientRect();
+            const linkRect = activeLink.getBoundingClientRect();
+            indicator!.style.top = `${linkRect.top - trackRect.top}px`;
+            indicator!.style.height = `${linkRect.height}px`;
+            indicator!.style.opacity = "1";
+          }
+        }
+      } else {
+        indicator!.style.opacity = "0";
+      }
     }
 
-    // Use IntersectionObserver to detect which heading is near the top
-    const navHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 64;
-    const rootMarginTop = -(navHeight + 40);
-    const rootMarginBottom = -(window.innerHeight - navHeight - 120);
+    // Scroll-based heading detection
+    const navHeight =
+      parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          "--nav-height"
+        )
+      ) || 64;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Find the topmost visible heading
-        const visibleEntries = entries.filter((e) => e.isIntersecting);
-        if (visibleEntries.length > 0) {
-          // Pick the one closest to the top
-          const topEntry = visibleEntries.reduce((a, b) =>
-            a.boundingClientRect.top < b.boundingClientRect.top ? a : b
-          );
-          setActive(topEntry.target.id);
-        }
-      },
-      {
-        rootMargin: `${rootMarginTop}px 0px ${rootMarginBottom}px 0px`,
-        threshold: 0,
-      }
-    );
-
-    headingElements.forEach((el) => observer.observe(el));
-
-    // Also handle scroll to highlight the heading closest to the viewport top
-    // This handles the case when scrolling past all observers
     function onScroll() {
       let closest: HTMLElement | null = null;
       let closestDist = Infinity;
@@ -93,7 +104,6 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
       headingElements.forEach((el) => {
         const rect = el.getBoundingClientRect();
         const dist = Math.abs(rect.top - navHeight - 20);
-        // Only consider headings that are at or above the threshold
         if (rect.top <= navHeight + 60 && dist < closestDist) {
           closestDist = dist;
           closest = el;
@@ -103,7 +113,6 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
       if (closest) {
         setActive((closest as HTMLElement).id);
       } else {
-        // If no heading has scrolled past, activate the first one if near top
         const firstRect = headingElements[0].getBoundingClientRect();
         if (firstRect.top > navHeight) {
           setActive(null);
@@ -112,15 +121,19 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     }
 
     let scrollTicking = false;
-    window.addEventListener('scroll', () => {
-      if (!scrollTicking) {
-        requestAnimationFrame(() => {
-          onScroll();
-          scrollTicking = false;
-        });
-        scrollTicking = true;
-      }
-    }, { passive: true });
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (!scrollTicking) {
+          requestAnimationFrame(() => {
+            onScroll();
+            scrollTicking = false;
+          });
+          scrollTicking = true;
+        }
+      },
+      { passive: true }
+    );
 
     // Initial check
     onScroll();
@@ -128,7 +141,7 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 
   // Run on initial load and on Astro page navigations
   initTocHighlight();
-  document.addEventListener('astro:after-swap', initTocHighlight);
+  document.addEventListener("astro:after-swap", initTocHighlight);
 </script>
 
 <style>
@@ -155,44 +168,54 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     text-transform: lowercase;
   }
 
+  .toc-track {
+    position: relative;
+    border-left: 1px solid var(--border-2);
+  }
+
+  .toc-indicator {
+    position: absolute;
+    left: -1px;
+    top: 0;
+    width: 2px;
+    height: 0;
+    background: var(--accent);
+    opacity: 0;
+    transition:
+      top var(--duration-base) var(--ease-out),
+      height var(--duration-base) var(--ease-out),
+      opacity var(--duration-fast) var(--ease-out);
+    border-radius: 1px;
+    z-index: 1;
+  }
+
   .toc-list {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
+    gap: 0;
   }
 
   .toc-link {
     display: block;
     font-size: 0.8125rem;
-    color: var(--fg-2);
+    color: var(--fg-3);
     text-decoration: none;
-    padding: 0.3125rem 0.625rem;
-    border-radius: 4px;
-    border-left: 2px solid transparent;
-    transition: all var(--duration-fast) var(--ease-out);
+    padding: 0.3125rem 0.75rem;
+    transition: color var(--duration-fast) var(--ease-out);
     line-height: 1.4;
   }
 
   .toc-link:hover {
-    color: var(--fg-0);
-    background: var(--bg-2);
-    border-left-color: var(--accent);
+    color: var(--fg-1);
   }
 
   .toc-link.active {
-    color: var(--accent);
-    border-left-color: var(--accent);
-    background: var(--accent-subtle);
+    color: var(--fg-0);
   }
 
   .toc-depth-3 .toc-link {
-    padding-left: 1.25rem;
+    padding-left: 1.5rem;
     font-size: 0.75rem;
-    color: var(--fg-3);
-  }
-
-  .toc-depth-3 .toc-link.active {
-    color: var(--accent);
   }
 </style>
