@@ -11,6 +11,8 @@ interactive: true
 ---
 
 import CoinFlipTower from "./CoinFlipTower.tsx";
+import DeleteDiagram from "./DeleteDiagram.tsx";
+import InsertDiagram from "./InsertDiagram.tsx";
 import LuckLab from "./LuckLab.tsx";
 import SearchRace from "./SearchRace.tsx";
 import SkipListLab from "./SkipListLab.tsx";
@@ -44,7 +46,6 @@ You want a collection that stays sorted, and you want to look things up, insert 
 
 - A **sorted array** finds things fast with binary search, but inserting in the middle means shifting everything after it.
 - A **sorted linked list** inserts in a blink once you're standing in the right spot, but getting to that spot means walking from the front.
-- A **balanced tree** (AVL, red-black) is fast at everything, but the rebalancing code is where the bugs live.
 
 A skip list asks a different question: what if we keep the linked list and just add shortcuts?
 
@@ -148,25 +149,43 @@ A few things to notice while you play:
 - The strict "smaller than" does real work. The walk stops _on the last node smaller than the target_, so the bottom lane's next pointer is the first node that is greater than or equal to it. One loop answers both "is it here?" and "where would it go?".
 - Landing exactly on the key is not required. Searching for 17 ends between 12 and 18, and that is the answer: not here, but this is the slot.
 
-### Insert: search, then splice
+### Insert: search, then hook in
 
-Inserting is a search with a memory. While descending, the code records the last node it stood on at each lane. These are the **predecessors**, and they are the only nodes whose pointers have to change. The splice itself is the classic linked-list move, once per lane the new node lives on:
+Inserting a new key is a search with a notepad. While walking down, we record the last node we stood on at every lane. These are our **predecessors**, and they are the only nodes whose forward pointers will need to change.
+
+Here is the step-by-step game plan:
+
+1. **Find where it belongs:** Run `find(key)` to collect the predecessors. Look at what sits directly in front of the bottom predecessor (`preds[0].next[0]`). If it already matches our key, stop; it's already in the list! (This implementation behaves like a Set with unique keys).
+2. **Roll for the new tower height:** Call `randomLevel()` to flip our coins. Say we get a height of 3: our new node needs pointers for lanes 0, 1, and 2.
+   - _What if the new tower is taller than any tower currently in the list?_ If `h > s.level`, our new node reaches lanes that don't have any existing nodes yet. On those brand new lanes, the starting `head` sentinel becomes the predecessor, and `s.level` grows to match `h`.
+3. **The two-handed hookup (floor by floor):** On every lane the new node lives on, we connect it between the predecessor and whatever was originally next:
+
+<InsertDiagram />
+
+In Go:
 
 ```go
 n := &node{key: key, next: make([]*node, h)}
 for lvl := 0; lvl < h; lvl++ {
-	n.next[lvl] = preds[lvl].next[lvl] // new node points at the old next
-	preds[lvl].next[lvl] = n           // predecessor points at the new node
+	n.next[lvl] = preds[lvl].next[lvl] // Step 1: new node grabs the right side
+	preds[lvl].next[lvl] = n           // Step 2: predecessor grabs the new node
 }
 ```
 
-If the new tower is taller than anything seen so far, the head becomes the predecessor on the new lanes and `level` goes up.
+> **Why the pointer order matters:** If you ran Step 2 first (`preds[lvl].next[lvl] = n`), you would overwrite the predecessor's only arrow to the right, and the entire rest of that lane would float away into the void. You have to grab onto the rope ahead of you before letting go of the one behind you.
 
 Go back to the lab and try **Insert** with 22. Then set the height dropdown to **5** and insert 50, and watch the list grow a brand new top lane. Insert a few more with random heights and see how the shape changes.
 
-### Delete: the reverse splice
+### Delete: step around the target
 
-Deleting is the same dance backwards. Find the predecessors, then make each one skip over the target:
+Deleting is the same dance backwards. We locate the target, reroute the arrows to skip right past it, and tidy up:
+
+1. **Confirm the target exists:** Run `find(key)` to collect the predecessors. On the bottom lane, inspect the node right after the predecessor: `target := preds[0].next[0]`. If `target == nil` or `target.key != key`, the key was never here, so we exit early.
+2. **Bypass the node on each lane:** For every lane that the target's tower reaches, tell its predecessor to look past it and point directly at whatever the target was pointing to:
+
+<DeleteDiagram />
+
+In Go:
 
 ```go
 for lvl := len(target.next) - 1; lvl >= 0; lvl-- {
@@ -174,9 +193,19 @@ for lvl := len(target.next) - 1; lvl >= 0; lvl-- {
 }
 ```
 
+3. **Lower the ceiling (if a lane becomes empty):** If the deleted node was the only occupant of the highest lane in the list, that top lane is now completely deserted. We decrement `s.level` so future searches don't waste time scanning an empty floor:
+
+```go
+for s.level > 1 && s.head.next[s.level-1] == nil {
+	s.level-- // drop lanes that became empty
+}
+```
+
+> **A note on memory cleanup:** In Go, once no pointers reference `target`, the runtime's garbage collector quietly reclaims its memory. But in languages with manual memory management like C, C++, or Zig (e.g. using `free()` or custom allocators), unlinking is only half the job! You must explicitly free the unlinked node and its pointer array from memory; otherwise, every deletion leaves behind a memory leak.
+
 Try **Delete** on 37, the tallest tower, and watch it come out lane by lane.
 
-Some implementations don't unlink at all. They mark the node as deleted and clean up later, which is popular when other threads may still be reading. The textbook version unlinks, and that is what the lab shows.
+Some concurrent implementations don't unlink at all right away. They mark the node with a "deleted" tombstone bit and let background sweeps clean it up later, which prevents crashing readers that may still be midway through a hop. The textbook version unlinks directly, and that is what the lab shows.
 
 ## Why is it O(log n)?
 
@@ -185,6 +214,58 @@ Here is a hand-wavy argument I like, because it's fun. Imagine searching _backwa
 At each step you either came from the **left** or from **above**. And since a node's height was decided by coin flips, "is there a level above me?" is itself a coin flip. So at every step it's about 50/50: left, or up.
 
 You need to climb about `log₂ n` levels in total, because that is how many lanes the list has. Each climb costs about 2 steps on average, one up plus on average one left. That is roughly `2·log₂ n` steps. For 2,048 items that's about 22, which is what the race above shows.
+
+### A more formal mathematical derivation
+
+Nevertheless, for folks interested in the formal math, William Pugh's original 1990 paper provides an elegant derivation using this exact backward walk.
+
+Let's trace a search backwards from the target node at the bottom lane (Lane 0) up to the header node:
+
+1. **The recurrence relation:**  
+   Suppose we are standing at some node on lane $k$ looking backwards. At every step:
+   - With probability $p$, this node was tall enough to reach lane $k + 1$. We take **1 step up** to lane $k + 1$, leaving $k - 1$ levels left to climb.
+   - With probability $1 - p$, this node did not reach lane $k + 1$. We take **1 step left** on the same lane, still leaving $k$ levels left to climb.
+
+   If $C(k)$ is the expected number of steps to climb $k$ levels backwards:
+
+   $$C(k) = (1 - p)(1 + C(k)) + p(1 + C(k - 1))$$
+
+   Distributing the terms:
+
+   $$C(k) = 1 + (1 - p)C(k) + p \cdot C(k - 1)$$
+
+   $$p \cdot C(k) = 1 + p \cdot C(k - 1)$$
+
+   $$C(k) = \frac{1}{p} + C(k - 1)$$
+
+   Since $C(0) = 0$ (once you reach the top lane, there are 0 levels left to climb), unrolling the recurrence gives:
+
+   $$C(k) = \frac{k}{p}$$
+
+   For a fair coin ($p = 0.5$, so $\frac{1}{p} = 2$):
+
+   $$C(k) = 2k$$
+
+   Every level we need to climb costs an expected **2 steps** (1 step up, plus an average of 1 step left).
+
+2. **How many levels are there?**  
+   In a skip list of $n$ items, the probability that a node reaches lane $k$ is $p^{k - 1}$. The expected number of nodes on lane $k$ is $n \cdot p^{k - 1}$.  
+   The list's height naturally caps out where the expected number of nodes on a lane drops to roughly 1:
+
+   $$n \cdot p^{L - 1} \approx 1 \implies L \approx 1 + \log_{1/p} n$$
+
+   For a fair coin ($p = 0.5$), this is approximately $\log_2 n$ levels.
+
+3. **Total expected search cost:**  
+   Multiplying the expected levels $L$ by the cost per level $\frac{1}{p}$:
+
+   $$\text{Expected Steps} \le \frac{L}{p} = \frac{\log_{1/p} n}{p} = O(\log n)$$
+
+   For $n = 2{,}048$ items with $p = 0.5$:
+
+   $$\text{Expected Steps} \approx 2 \cdot \log_2(2048) = 2 \cdot 11 = 22 \text{ steps}$$
+
+   Because insertion and deletion both run a search followed by a constant number of pointer updates per level, they share the exact same expected $O(\log n)$ bound.
 
 ## What can go wrong
 
