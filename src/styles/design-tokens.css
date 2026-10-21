@@ -1,9 +1,3 @@
-/*
- * Makeshift Engineering — Design Tokens
- * Ported from makeshift.pro for cross-site consistency.
- * Future: extract into @makeshift/ui/tokens.css
- */
-
 :root {
   /* ── Backgrounds ── */
   --bg-0: #0a0a0c;

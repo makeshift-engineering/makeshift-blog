@@ -25,7 +25,7 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
         <ul class="toc-list">
           {filteredHeadings.map((heading) => (
             <li class:list={["toc-item", `toc-depth-${heading.depth}`]}>
-              <a href={`#${heading.slug}`} class="toc-link">
+              <a href={`#${heading.slug}`} class="toc-link" data-heading-slug={heading.slug}>
                 {heading.text}
               </a>
             </li>
@@ -35,6 +35,101 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     </aside>
   )
 }
+
+<script>
+  function initTocHighlight() {
+    const tocLinks = document.querySelectorAll<HTMLAnchorElement>('.toc-link[data-heading-slug]');
+    if (tocLinks.length === 0) return;
+
+    const slugs = Array.from(tocLinks).map((link) => link.dataset.headingSlug!);
+    const headingElements = slugs
+      .map((slug) => document.getElementById(slug))
+      .filter((el): el is HTMLElement => el !== null);
+
+    if (headingElements.length === 0) return;
+
+    let activeSlug: string | null = null;
+
+    function setActive(slug: string | null) {
+      if (slug === activeSlug) return;
+      activeSlug = slug;
+      tocLinks.forEach((link) => {
+        const isActive = link.dataset.headingSlug === slug;
+        link.classList.toggle('active', isActive);
+      });
+    }
+
+    // Use IntersectionObserver to detect which heading is near the top
+    const navHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 64;
+    const rootMarginTop = -(navHeight + 40);
+    const rootMarginBottom = -(window.innerHeight - navHeight - 120);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the topmost visible heading
+        const visibleEntries = entries.filter((e) => e.isIntersecting);
+        if (visibleEntries.length > 0) {
+          // Pick the one closest to the top
+          const topEntry = visibleEntries.reduce((a, b) =>
+            a.boundingClientRect.top < b.boundingClientRect.top ? a : b
+          );
+          setActive(topEntry.target.id);
+        }
+      },
+      {
+        rootMargin: `${rootMarginTop}px 0px ${rootMarginBottom}px 0px`,
+        threshold: 0,
+      }
+    );
+
+    headingElements.forEach((el) => observer.observe(el));
+
+    // Also handle scroll to highlight the heading closest to the viewport top
+    // This handles the case when scrolling past all observers
+    function onScroll() {
+      let closest: HTMLElement | null = null;
+      let closestDist = Infinity;
+
+      headingElements.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const dist = Math.abs(rect.top - navHeight - 20);
+        // Only consider headings that are at or above the threshold
+        if (rect.top <= navHeight + 60 && dist < closestDist) {
+          closestDist = dist;
+          closest = el;
+        }
+      });
+
+      if (closest) {
+        setActive((closest as HTMLElement).id);
+      } else {
+        // If no heading has scrolled past, activate the first one if near top
+        const firstRect = headingElements[0].getBoundingClientRect();
+        if (firstRect.top > navHeight) {
+          setActive(null);
+        }
+      }
+    }
+
+    let scrollTicking = false;
+    window.addEventListener('scroll', () => {
+      if (!scrollTicking) {
+        requestAnimationFrame(() => {
+          onScroll();
+          scrollTicking = false;
+        });
+        scrollTicking = true;
+      }
+    }, { passive: true });
+
+    // Initial check
+    onScroll();
+  }
+
+  // Run on initial load and on Astro page navigations
+  initTocHighlight();
+  document.addEventListener('astro:after-swap', initTocHighlight);
+</script>
 
 <style>
   .toc {
@@ -85,9 +180,19 @@ const filteredHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     border-left-color: var(--accent);
   }
 
+  .toc-link.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: var(--accent-subtle);
+  }
+
   .toc-depth-3 .toc-link {
     padding-left: 1.25rem;
     font-size: 0.75rem;
     color: var(--fg-3);
+  }
+
+  .toc-depth-3 .toc-link.active {
+    color: var(--accent);
   }
 </style>
