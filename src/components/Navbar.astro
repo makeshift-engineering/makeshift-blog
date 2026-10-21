@@ -95,6 +95,52 @@ const navLinks = [
   menu?.querySelectorAll(".mobile-link").forEach((link) => {
     link.addEventListener("click", closeMenu);
   });
+
+  // Hide navbar on scroll down, reveal on scroll up
+  function initNavbarScroll() {
+    const navbar = document.getElementById("main-nav");
+    if (!navbar) return;
+
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+    const threshold = 10; // minimum scroll delta to trigger
+
+    function onScroll() {
+      if (!navbar) return;
+
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - lastScrollY;
+
+      if (Math.abs(delta) < threshold) return;
+
+      if (delta > 0 && currentScrollY > 100) {
+        // Scrolling down — hide
+        navbar?.classList.add("navbar--hidden");
+      } else {
+        // Scrolling up — show
+        navbar?.classList.remove("navbar--hidden");
+      }
+
+      lastScrollY = currentScrollY;
+    }
+
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (!ticking) {
+          requestAnimationFrame(() => {
+            onScroll();
+            ticking = false;
+          });
+          ticking = true;
+        }
+      },
+      { passive: true }
+    );
+  }
+
+  initNavbarScroll();
+  document.addEventListener("astro:after-swap", initNavbarScroll);
 </script>
 
 <style>
@@ -105,10 +151,13 @@ const navLinks = [
     right: 0;
     height: var(--nav-height);
     z-index: 100;
-    background: color-mix(in srgb, var(--bg-0) 80%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: var(--bg-0);
     border-bottom: 1px solid var(--border);
+    transition: transform var(--duration-base) var(--ease-out);
+  }
+
+  .navbar--hidden {
+    transform: translateY(-100%);
   }
 
   .nav-inner {
