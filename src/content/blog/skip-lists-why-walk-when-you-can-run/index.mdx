@@ -1,0 +1,467 @@
+---
+title: "Skip Lists: Why Walk When You Can Run?"
+description: "A sorted linked list with random express lanes. How coin flips make search, insert and delete fast, why the cost is only expected and never guaranteed, and what happens when the coin is rigged. Four interactive demos and a complete Go program."
+publishDate: 2026-10-19T12:00:00.000Z
+author: "Saptak Manna"
+authorGithub: "theMr17"
+category: "deep-dives"
+tags: ["golang", "skip-list", "data-structures", "algorithms"]
+draft: false
+interactive: true
+---
+
+import CoinFlipTower from "./CoinFlipTower.tsx";
+import DeleteDiagram from "./DeleteDiagram.tsx";
+import InsertDiagram from "./InsertDiagram.tsx";
+import LuckLab from "./LuckLab.tsx";
+import SearchRace from "./SearchRace.tsx";
+import SkipListLab from "./SkipListLab.tsx";
+import SubwayTrick from "./SubwayTrick.tsx";
+
+Take a sorted linked list with a million items in it. To find one item, you start at the front and walk. On average you pass half a million nodes before you get there. That is the whole problem with linked lists, and it is why nobody uses a plain one when lookups matter.
+
+Now give a few of the nodes a shortcut that jumps ahead, and a few of those an even longer shortcut. Search gets fast. The odd part is how you decide which nodes get the shortcuts: you flip a coin.
+
+That is a skip list. It was published by William Pugh in 1990 as a simpler alternative to balanced trees, and it still shows up wherever a sorted, in-memory structure is needed. This post explains how it works, with things you can click. Nothing here depends on any particular database or library.
+
+## TL;DR
+
+- A **skip list** is a sorted linked list with extra "express lane" pointers. Each lane is a sparser copy of the lane below it, and the bottom lane holds every node.
+- **Expected `O(log n)`** search, insert and delete, compared to `O(n)` for a plain linked list. "Expected" matters, and a whole section below is about it.
+- **Tower heights come from coin flips.** Heads, grow a level; tails, stop. Half the nodes are 1 tall, a quarter are 2 tall, an eighth are 3 tall, and so on.
+- **Search rule:** on each lane, hop right while the next key is smaller than your target. When you can't, drop down a lane. You never move left or back up.
+- **Insert** is a search that remembers the last node it stood on at every lane (the _predecessors_), followed by two pointer writes per lane. **Delete** is the same walk, then each predecessor skips over the target.
+- **The cost:** about 2 pointers per node with a fair coin, pointer chasing that CPU caches don't love, and no hard worst-case guarantee.
+- **Why people like it:** no rotations and no rebalancing. The whole structure below is about 90 lines of Go, and the full program is at the end.
+
+## Prerequisites
+
+- You know what a linked list is. That's all the theory needed.
+- The Go snippets are short and read like pseudocode. If you don't write Go, skip the code and follow the pictures.
+- The demos run in your browser. To run the complete program at the end you need Go 1.22 or newer. It has no dependencies.
+
+## The problem with keeping things sorted
+
+You want a collection that stays sorted, and you want to look things up, insert things and delete things quickly. The usual options each have a catch:
+
+- A **sorted array** finds things fast with binary search, but inserting in the middle means shifting everything after it.
+- A **sorted linked list** inserts in a blink once you're standing in the right spot, but getting to that spot means walking from the front.
+
+A skip list asks a different question: what if we keep the linked list and just add shortcuts?
+
+## The art of skipping nodes
+
+Picture a subway line with 100 stops. The local train stops at every station. Slow, but it gets you everywhere. Now add an express train that only stops at every 10th station.
+
+To get to stop 87, you don't ride the local the whole way. You take the express to stop 80, hop off, and ride the local for the last 7. Add a super-express that stops every 50th station and it gets even better: super-express to 50, express to 80, local to 87.
+
+That's the whole idea. Each **lane** is a linked list, and each lane is a sparser version of the one below it. The bottom lane holds every node.
+
+<SubwayTrick />
+
+Here's a race. Same keys, two data structures. Hit the buttons, then crank the list size up.
+
+<SearchRace client:visible />
+
+At 2,048 items the linked list averages around a thousand comparisons. The skip list barely breaks twenty. And look at how it behaves as the list grows: quadruple the size and the skip list only gains a handful of steps.
+
+## What a node looks like
+
+A skip list node is a key plus a tower of forward pointers:
+
+```go
+type node struct {
+	key  int
+	next []*node // next[i] is the following node on lane i
+}
+```
+
+The only interesting field is `next`. It's a slice, and its **length is the node's height**. A node of height 3 has pointers for lanes 0, 1 and 2. Lane 0 links to the next node in key order. Lane 1 links to the next node _tall enough to be on lane 1_, and so on up.
+
+The list itself holds a **head sentinel** and the number of lanes in use:
+
+```go
+type SkipList struct {
+	head  *node // no key, a tower as tall as the cap allows
+	level int   // lanes in use: the height of the tallest tower so far
+}
+```
+
+The head is a fake node whose tower is full height, so every lane has a starting point. Searches begin on lane `level - 1`, the highest lane that has anything on it, so a mostly empty list doesn't waste time scanning empty lanes.
+
+## Who gets to be tall? Coin flips.
+
+Here's the part that surprises people: nobody plans the express lanes. When a node is inserted, we roll for its height.
+
+```go
+func randomLevel() int {
+	h := 1
+	for h < maxLevel && rng.Intn(2) == 0 {
+		h++
+	}
+	return h
+}
+```
+
+Everyone starts at height 1. Then flip a coin: heads and you grow a level, tails and you stop. Half the nodes stay at 1, a quarter reach 2, an eighth reach 3. The `maxLevel` check is only a safety cap, so a freak run of heads can't build a 60-story tower.
+
+Build one tower, then build a thousand and watch the bars settle onto the expected percentages:
+
+<CoinFlipTower client:visible />
+
+This works because each lane ends up holding about **half** the nodes of the lane below it. That is exactly the "every other station" shape from the subway, except nobody sat down and designed it. Randomness gives the same balance a tree would, on average, for free.
+
+A node's expected height is 1 + ½ + ¼ + ... = 2, so the whole structure costs roughly twice the pointers of a plain linked list. Remember that number, because the coin is a setting you can change, and we'll change it later.
+
+## Searching: hop right, drop down
+
+Time to watch it happen. The 🐧 below is just our cursor, the "current node" pointer. The code panel highlights the exact line running at each step.
+
+The rule is short:
+
+1. Start on the top lane, at the head.
+2. Look at the next node on this lane. If its key is **smaller than your target**, hop onto it.
+3. If it isn't (or there is no next node), you've gone as far as this lane can take you. Remember where you are, and **drop down one lane**.
+4. Repeat. When you reach the bottom lane, the next node is either your key or the spot where it would go.
+
+In Go:
+
+```go
+func (s *SkipList) find(key int) (preds [maxLevel]*node) {
+	cur := s.head
+	for lvl := s.level - 1; lvl >= 0; lvl-- {
+		for next := cur.next[lvl]; next != nil && next.key < key; next = cur.next[lvl] {
+			cur = next
+		}
+		preds[lvl] = cur
+	}
+	return preds
+}
+```
+
+Try **Search** first. Look for 24, then for 17 (which isn't in the list), then for 58. Watch how few nodes get touched.
+
+<SkipListLab client:visible />
+
+A few things to notice while you play:
+
+- The cursor only ever moves **right** or **down**. It never backs up. That is what makes the search cheap.
+- The strict "smaller than" does real work. The walk stops _on the last node smaller than the target_, so the bottom lane's next pointer is the first node that is greater than or equal to it. One loop answers both "is it here?" and "where would it go?".
+- Landing exactly on the key is not required. Searching for 17 ends between 12 and 18, and that is the answer: not here, but this is the slot.
+
+### Insert: search, then hook in
+
+Inserting a new key is a search with a notepad. While walking down, we record the last node we stood on at every lane. These are our **predecessors**, and they are the only nodes whose forward pointers will need to change.
+
+Here is the step-by-step game plan:
+
+1. **Find where it belongs:** Run `find(key)` to collect the predecessors. Look at what sits directly in front of the bottom predecessor (`preds[0].next[0]`). If it already matches our key, stop; it's already in the list! (This implementation behaves like a Set with unique keys).
+2. **Roll for the new tower height:** Call `randomLevel()` to flip our coins. Say we get a height of 3: our new node needs pointers for lanes 0, 1, and 2.
+   - _What if the new tower is taller than any tower currently in the list?_ If `h > s.level`, our new node reaches lanes that don't have any existing nodes yet. On those brand new lanes, the starting `head` sentinel becomes the predecessor, and `s.level` grows to match `h`.
+3. **The two-handed hookup (floor by floor):** On every lane the new node lives on, we connect it between the predecessor and whatever was originally next:
+
+<InsertDiagram />
+
+In Go:
+
+```go
+n := &node{key: key, next: make([]*node, h)}
+for lvl := 0; lvl < h; lvl++ {
+	n.next[lvl] = preds[lvl].next[lvl] // Step 1: new node grabs the right side
+	preds[lvl].next[lvl] = n           // Step 2: predecessor grabs the new node
+}
+```
+
+> **Why the pointer order matters:** If you ran Step 2 first (`preds[lvl].next[lvl] = n`), you would overwrite the predecessor's only arrow to the right, and the entire rest of that lane would float away into the void. You have to grab onto the rope ahead of you before letting go of the one behind you.
+
+Go back to the lab and try **Insert** with 22. Then set the height dropdown to **5** and insert 50, and watch the list grow a brand new top lane. Insert a few more with random heights and see how the shape changes.
+
+### Delete: step around the target
+
+Deleting is the same dance backwards. We locate the target, reroute the arrows to skip right past it, and tidy up:
+
+1. **Confirm the target exists:** Run `find(key)` to collect the predecessors. On the bottom lane, inspect the node right after the predecessor: `target := preds[0].next[0]`. If `target == nil` or `target.key != key`, the key was never here, so we exit early.
+2. **Bypass the node on each lane:** For every lane that the target's tower reaches, tell its predecessor to look past it and point directly at whatever the target was pointing to:
+
+<DeleteDiagram />
+
+In Go:
+
+```go
+for lvl := len(target.next) - 1; lvl >= 0; lvl-- {
+	preds[lvl].next[lvl] = target.next[lvl]
+}
+```
+
+3. **Lower the ceiling (if a lane becomes empty):** If the deleted node was the only occupant of the highest lane in the list, that top lane is now completely deserted. We decrement `s.level` so future searches don't waste time scanning an empty floor:
+
+```go
+for s.level > 1 && s.head.next[s.level-1] == nil {
+	s.level-- // drop lanes that became empty
+}
+```
+
+> **A note on memory cleanup:** In Go, once no pointers reference `target`, the runtime's garbage collector quietly reclaims its memory. But in languages with manual memory management like C, C++, or Zig (e.g. using `free()` or custom allocators), unlinking is only half the job! You must explicitly free the unlinked node and its pointer array from memory; otherwise, every deletion leaves behind a memory leak.
+
+Try **Delete** on 37, the tallest tower, and watch it come out lane by lane.
+
+Some concurrent implementations don't unlink at all right away. They mark the node with a "deleted" tombstone bit and let background sweeps clean it up later, which prevents crashing readers that may still be midway through a hop. The textbook version unlinks directly, and that is what the lab shows.
+
+## Why is it O(log n)?
+
+Here is a hand-wavy argument I like, because it's fun. Imagine searching _backwards_: you're standing at the node you found, on the bottom lane, and you retrace the path to the top-left corner.
+
+At each step you either came from the **left** or from **above**. And since a node's height was decided by coin flips, "is there a level above me?" is itself a coin flip. So at every step it's about 50/50: left, or up.
+
+You need to climb about `log₂ n` levels in total, because that is how many lanes the list has. Each climb costs about 2 steps on average, one up plus on average one left. That is roughly `2·log₂ n` steps. For 2,048 items that's about 22, which is what the race above shows.
+
+### A more formal mathematical derivation
+
+Nevertheless, for folks interested in the formal math, William Pugh's original 1990 paper provides an elegant derivation using this exact backward walk.
+
+Let's trace a search backwards from the target node at the bottom lane (Lane 0) up to the header node:
+
+1. **The recurrence relation:**  
+   Suppose we are standing at some node on lane $k$ looking backwards. At every step:
+   - With probability $p$, this node was tall enough to reach lane $k + 1$. We take **1 step up** to lane $k + 1$, leaving $k - 1$ levels left to climb.
+   - With probability $1 - p$, this node did not reach lane $k + 1$. We take **1 step left** on the same lane, still leaving $k$ levels left to climb.
+
+   If $C(k)$ is the expected number of steps to climb $k$ levels backwards:
+
+   $$C(k) = (1 - p)(1 + C(k)) + p(1 + C(k - 1))$$
+
+   Distributing the terms:
+
+   $$C(k) = 1 + (1 - p)C(k) + p \cdot C(k - 1)$$
+
+   $$p \cdot C(k) = 1 + p \cdot C(k - 1)$$
+
+   $$C(k) = \frac{1}{p} + C(k - 1)$$
+
+   Since $C(0) = 0$ (once you reach the top lane, there are 0 levels left to climb), unrolling the recurrence gives:
+
+   $$C(k) = \frac{k}{p}$$
+
+   For a fair coin ($p = 0.5$, so $\frac{1}{p} = 2$):
+
+   $$C(k) = 2k$$
+
+   Every level we need to climb costs an expected **2 steps** (1 step up, plus an average of 1 step left).
+
+2. **How many levels are there?**  
+   In a skip list of $n$ items, the probability that a node reaches lane $k$ is $p^{k - 1}$. The expected number of nodes on lane $k$ is $n \cdot p^{k - 1}$.  
+   The list's height naturally caps out where the expected number of nodes on a lane drops to roughly 1:
+
+   $$n \cdot p^{L - 1} \approx 1 \implies L \approx 1 + \log_{1/p} n$$
+
+   For a fair coin ($p = 0.5$), this is approximately $\log_2 n$ levels.
+
+3. **Total expected search cost:**  
+   Multiplying the expected levels $L$ by the cost per level $\frac{1}{p}$:
+
+   $$\text{Expected Steps} \le \frac{L}{p} = \frac{\log_{1/p} n}{p} = O(\log n)$$
+
+   For $n = 2{,}048$ items with $p = 0.5$:
+
+   $$\text{Expected Steps} \approx 2 \cdot \log_2(2048) = 2 \cdot 11 = 22 \text{ steps}$$
+
+   Because insertion and deletion both run a search followed by a constant number of pointer updates per level, they share the exact same expected $O(\log n)$ bound.
+
+## What can go wrong
+
+"Expected" is not "guaranteed", and the difference is the main honest weakness of a skip list. Pugh's paper says as much: the worst case is bad, but a seriously lopsided list is very unlikely. Let's look at how unlikely.
+
+The demo below builds 120 fresh skip lists, searches each one 30 times, and plots how much the average cost varies from list to list. Then it lets you rig the coin.
+
+<LuckLab client:visible />
+
+Three things worth trying:
+
+- **Leave the coin fair** (`p = 0.5`) and read the histogram. In my runs at 1,024 items, the average cost of a list landed around 20 comparisons, and the unluckiest of 150 lists was around 25. Luck exists, but it is a small wiggle, not a cliff.
+- **Slide `p` to 0.** Every coin lands on tails, nobody gets a tower, and the skip list quietly turns into a plain linked list. The average cost jumps to about half the list size.
+- **Slide `p` to 1.** Now every node grows to the cap. Every lane holds every node, and the cost is back to roughly half the list again. A skip list needs both short and tall nodes.
+
+Then try `p = 0.25`. In my runs it was about as fast as the fair coin while using roughly 1.3 pointers per node instead of 2. A lower `p` buys memory with a few extra steps, up to a point: by `p = 0.1` it was clearly slower. That trade-off between pointers and steps is one of the few tuning knobs a skip list has. Pugh's paper discusses choosing it.
+
+## Costs and trade-offs
+
+- **Expected, not worst-case.** A balanced tree can promise `O(log n)` every time. A skip list promises it on average, with very high probability.
+- **Pointer chasing.** Every hop follows a pointer to somewhere else in memory. Arrays and B-trees are friendlier to CPU caches.
+- **Extra memory.** About 2 pointers per node with a fair coin, plus a slice header per tower in Go.
+- **Needs a random number generator.** It's cheap, but it is a dependency, and it makes behavior hard to reproduce unless you seed it.
+- **What you get back:** no rotations, no color rules, and sorted iteration for free by walking the bottom lane. Ordered range scans are just "search for the start, then keep going right".
+
+## When a skip list is the right choice
+
+A checklist that transfers:
+
+- **Do you need data kept in sorted order?** If a hash map would do, use a hash map.
+- **Do you scan ranges?** Walking the bottom lane from any starting point is a cheap range scan.
+- **Would you rather have simple code than a hard guarantee?** The simplicity is the main selling point.
+- **Will other threads touch it?** Insert and delete change only a few pointers around one spot, which makes skip lists friendlier to concurrent designs than rebalancing trees.
+- **Is every microsecond of cache behavior critical?** Then measure against a B-tree before choosing.
+
+## Summary
+
+A skip list is a sorted linked list where a fair coin decides which nodes get express lanes. That one trick turns an `O(n)` walk into an expected `O(log n)` one, with no rebalancing code at all. Search hops right and drops down, insert and delete reuse the same walk and rewire a handful of pointers, and the cost is that the guarantee is probabilistic and the pointers are scattered.
+
+If you want to see the whole thing in one place, the program below is the complete implementation. Run it, change `maxLevel`, and break it.
+
+## Run it yourself
+
+Save this as `main.go` next to a `go.mod` (`go mod init skiplist`) and run `go run .`. There are no dependencies. It was tested with Go 1.22.
+
+```go
+package main
+
+import (
+	"fmt"
+	"math/rand"
+)
+
+const maxLevel = 16
+
+// A fixed seed keeps the output below repeatable.
+var rng = rand.New(rand.NewSource(3))
+
+type node struct {
+	key  int
+	next []*node // next[i] is the following node on lane i; len(next) is the tower height
+}
+
+type SkipList struct {
+	head  *node // sentinel: no key, a full-height tower
+	level int   // number of lanes currently in use
+}
+
+func New() *SkipList {
+	return &SkipList{head: &node{next: make([]*node, maxLevel)}, level: 1}
+}
+
+// randomLevel flips a fair coin: heads grows the tower, tails stops.
+func randomLevel() int {
+	h := 1
+	for h < maxLevel && rng.Intn(2) == 0 {
+		h++
+	}
+	return h
+}
+
+// find walks right while the next key is smaller, then drops a lane.
+// preds[lvl] is the last node on lane lvl whose key is smaller than key.
+func (s *SkipList) find(key int) (preds [maxLevel]*node, steps int) {
+	cur := s.head
+	for lvl := s.level - 1; lvl >= 0; lvl-- {
+		for next := cur.next[lvl]; next != nil && next.key < key; next = cur.next[lvl] {
+			cur = next
+			steps++
+		}
+		preds[lvl] = cur
+	}
+	return preds, steps
+}
+
+func (s *SkipList) Contains(key int) bool {
+	preds, _ := s.find(key)
+	n := preds[0].next[0]
+	return n != nil && n.key == key
+}
+
+func (s *SkipList) Insert(key int) bool {
+	preds, _ := s.find(key)
+	if n := preds[0].next[0]; n != nil && n.key == key {
+		return false // already there
+	}
+	h := randomLevel()
+	if h > s.level {
+		for lvl := s.level; lvl < h; lvl++ {
+			preds[lvl] = s.head
+		}
+		s.level = h
+	}
+	n := &node{key: key, next: make([]*node, h)}
+	for lvl := 0; lvl < h; lvl++ {
+		n.next[lvl] = preds[lvl].next[lvl]
+		preds[lvl].next[lvl] = n
+	}
+	return true
+}
+
+func (s *SkipList) Delete(key int) bool {
+	preds, _ := s.find(key)
+	target := preds[0].next[0]
+	if target == nil || target.key != key {
+		return false
+	}
+	for lvl := len(target.next) - 1; lvl >= 0; lvl-- {
+		preds[lvl].next[lvl] = target.next[lvl]
+	}
+	for s.level > 1 && s.head.next[s.level-1] == nil {
+		s.level-- // drop lanes that became empty
+	}
+	return true
+}
+
+// Print draws every lane, top first, so you can see the express lanes.
+func (s *SkipList) Print() {
+	for lvl := s.level - 1; lvl >= 0; lvl-- {
+		fmt.Printf("L%d: head", lvl)
+		for n := s.head.next[lvl]; n != nil; n = n.next[lvl] {
+			fmt.Printf(" -> %d", n.key)
+		}
+		fmt.Println(" -> nil")
+	}
+}
+
+func main() {
+	s := New()
+	for _, k := range []int{5, 12, 18, 24, 31, 37, 46, 58} {
+		s.Insert(k)
+	}
+	s.Print()
+
+	fmt.Println("contains 24:", s.Contains(24))
+	fmt.Println("contains 22:", s.Contains(22))
+	s.Delete(37)
+	fmt.Println("after deleting 37:")
+	s.Print()
+
+	// How many hops does a search take as the list grows?
+	for _, n := range []int{1000, 100000} {
+		big := New()
+		for i := 1; i <= n; i++ {
+			big.Insert(i)
+		}
+		total := 0
+		for i := 0; i < 1000; i++ {
+			_, steps := big.find(1 + rng.Intn(n))
+			total += steps
+		}
+		fmt.Printf("n=%-6d average rightward hops: %.1f\n", n, float64(total)/1000)
+	}
+}
+```
+
+The output with the fixed seed:
+
+```text
+L2: head -> 12 -> 37 -> nil
+L1: head -> 5 -> 12 -> 24 -> 31 -> 37 -> 58 -> nil
+L0: head -> 5 -> 12 -> 18 -> 24 -> 31 -> 37 -> 46 -> 58 -> nil
+contains 24: true
+contains 22: false
+after deleting 37:
+L2: head -> 12 -> nil
+L1: head -> 5 -> 12 -> 24 -> 31 -> 58 -> nil
+L0: head -> 5 -> 12 -> 18 -> 24 -> 31 -> 46 -> 58 -> nil
+n=1000   average rightward hops: 9.0
+n=100000 average rightward hops: 16.6
+```
+
+The first block draws every lane. The top lane holds just 12 and 37, the middle lane holds six keys, and the bottom lane holds all eight. After deleting 37, it disappears from every lane at once. The last two lines count rightward hops: about 9 for a thousand items and about 17 for a hundred thousand. A hundred times more data cost roughly 8 more hops.
+
+## Sources
+
+- William Pugh, [Skip Lists: A Probabilistic Alternative to Balanced Trees](https://cacm.acm.org/research/skip-lists-a-probabilistic-alternative-to-balanced-trees), Communications of the ACM, volume 33, issue 6, June 1990, pages 668 to 676.
+
+The numbers quoted from the demos are from my own runs at 1,024 items and will wiggle every time you re-roll.

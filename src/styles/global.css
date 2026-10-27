@@ -78,6 +78,42 @@ pre {
   margin: 1.5rem 0;
 }
 
+/* ── Math (KaTeX) ── */
+.katex {
+  color: var(--accent) !important;
+  font-size: 1.05em;
+}
+
+.katex .mord,
+.katex .mbin,
+.katex .mrel,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .minner,
+.katex .mop,
+.katex .text {
+  color: var(--accent) !important;
+}
+
+.katex .frac-line {
+  border-bottom-color: var(--accent) !important;
+}
+
+.katex-display {
+  margin: 1.5rem 0;
+  padding: 1.25rem 1.5rem;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display > .katex {
+  color: var(--accent) !important;
+}
+
 /* ── Selection ── */
 ::selection {
   background: var(--accent-glow);
